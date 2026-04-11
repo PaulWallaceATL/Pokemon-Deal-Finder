@@ -8,6 +8,7 @@ export interface EbayListing {
   priceCents: number;
   url: string;
   imageUrl: string;
+  imageUrls: string[];
   sellerName: string;
   condition: string;
 }
@@ -26,6 +27,7 @@ const mockListings: EbayListing[] = [
     priceCents: 2499,
     url: "https://www.ebay.com/itm/mock-001",
     imageUrl: "https://via.placeholder.com/200x280?text=Card",
+    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front", "https://via.placeholder.com/800x1120?text=Card+Back"],
     sellerName: "pokecards_seller",
     condition: "Near Mint",
   },
@@ -35,6 +37,7 @@ const mockListings: EbayListing[] = [
     priceCents: 2899,
     url: "https://www.ebay.com/itm/mock-002",
     imageUrl: "https://via.placeholder.com/200x280?text=Card",
+    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front"],
     sellerName: "card_central",
     condition: "Lightly Played",
   },
@@ -44,6 +47,7 @@ const mockListings: EbayListing[] = [
     priceCents: 3499,
     url: "https://www.ebay.com/itm/mock-003",
     imageUrl: "https://via.placeholder.com/200x280?text=Card",
+    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front", "https://via.placeholder.com/800x1120?text=Card+Back"],
     sellerName: "mint_pokemon",
     condition: "Mint",
   },
@@ -53,6 +57,7 @@ const mockListings: EbayListing[] = [
     priceCents: 1999,
     url: "https://www.ebay.com/itm/mock-004",
     imageUrl: "https://via.placeholder.com/200x280?text=Card",
+    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front"],
     sellerName: "budget_tcg",
     condition: "Moderately Played",
   },
@@ -62,10 +67,19 @@ const mockListings: EbayListing[] = [
     priceCents: 3700,
     url: "https://www.ebay.com/itm/mock-005",
     imageUrl: "https://via.placeholder.com/200x280?text=Card",
+    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front", "https://via.placeholder.com/800x1120?text=Card+Back"],
     sellerName: "top_tier_cards",
     condition: "Near Mint",
   },
 ];
+
+/**
+ * Convert an eBay thumbnail URL to the highest-resolution version.
+ * eBay image URLs follow the pattern: i.ebayimg.com/images/g/.../s-l{size}.jpg
+ */
+function toHighRes(url: string): string {
+  return url.replace(/s-l\d+(\.\w+)$/, "s-l1600$1");
+}
 
 function parsePriceCents(text: string | undefined): number | null {
   if (!text) return null;
@@ -124,15 +138,18 @@ export async function searchEbayListings(
     if (!priceCents || priceCents <= 0) return;
 
     const link = $item.find("a.s-item__link").attr("href") ?? "";
-    const imageUrl =
+    const thumbUrl =
       $item.find(".s-item__image-wrapper img").attr("src") ??
       $item.find("img").first().attr("src") ??
       "";
 
+    // Upgrade thumbnail to high-res: eBay thumbnails use s-l225 or s-l300,
+    // replacing with s-l1600 gets the full-size listing photo
+    const hiresUrl = toHighRes(thumbUrl);
+
     const conditionText = $item.find(".SECONDARY_INFO").text().trim();
     const sellerInfo = $item.find(".s-item__seller-info-text, .s-item__seller-info").text().trim();
 
-    // Extract item ID from URL
     const idMatch = link.match(/\/itm\/(\d+)/);
     const itemId = idMatch?.[1] ?? `eb-${Date.now()}-${listings.length}`;
 
@@ -141,7 +158,8 @@ export async function searchEbayListings(
       title,
       priceCents,
       url: link.split("?")[0],
-      imageUrl,
+      imageUrl: hiresUrl,
+      imageUrls: [hiresUrl],
       sellerName: sellerInfo || "unknown",
       condition: conditionText || "Not Specified",
     });

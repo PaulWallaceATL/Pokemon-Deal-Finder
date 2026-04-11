@@ -2,12 +2,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, TrendingDown } from "lucide-react";
+import { ExternalLink, TrendingDown, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { buttonVariants } from "@/components/ui/button";
-import { PRODUCT_TYPE_LABELS, type MockDeal } from "@/lib/mock-data";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { PRODUCT_TYPE_LABELS, type MockDeal, type PredictedGradeData } from "@/lib/mock-data";
+import { PSA_GRADE_LABELS } from "@/lib/grading/psa-standards";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -135,27 +142,33 @@ export function DealCard({ deal }: DealCardProps) {
             )}
           </div>
 
-          {/* PSA graded prices (if available) */}
+          {/* PSA graded prices + predicted grade */}
           {deal.psaPrices && (
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              <span className="font-semibold text-muted-foreground">PSA Graded:</span>
-              {deal.psaPrices.psa10 && (
-                <span>
-                  <span className="font-medium text-amber-600 dark:text-amber-400">10</span>{" "}
-                  {formatCents(deal.psaPrices.psa10)}
-                </span>
-              )}
-              {deal.psaPrices.psa9 && (
-                <span>
-                  <span className="font-medium text-blue-600 dark:text-blue-400">9</span>{" "}
-                  {formatCents(deal.psaPrices.psa9)}
-                </span>
-              )}
-              {deal.psaPrices.psa8 && (
-                <span>
-                  <span className="font-medium text-muted-foreground">8</span>{" "}
-                  {formatCents(deal.psaPrices.psa8)}
-                </span>
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span className="font-semibold text-muted-foreground">PSA Graded:</span>
+                {deal.psaPrices.psa10 && (
+                  <span className={getGradeHighlight(10, deal.predictedGrade)}>
+                    <span className="font-medium text-amber-600 dark:text-amber-400">10</span>{" "}
+                    {formatCents(deal.psaPrices.psa10)}
+                  </span>
+                )}
+                {deal.psaPrices.psa9 && (
+                  <span className={getGradeHighlight(9, deal.predictedGrade)}>
+                    <span className="font-medium text-blue-600 dark:text-blue-400">9</span>{" "}
+                    {formatCents(deal.psaPrices.psa9)}
+                  </span>
+                )}
+                {deal.psaPrices.psa8 && (
+                  <span className={getGradeHighlight(8, deal.predictedGrade)}>
+                    <span className="font-medium text-muted-foreground">8</span>{" "}
+                    {formatCents(deal.psaPrices.psa8)}
+                  </span>
+                )}
+              </div>
+
+              {deal.productType === "raw" && deal.predictedGrade && (
+                <PredictedGradeBadge prediction={deal.predictedGrade} />
               )}
             </div>
           )}
@@ -211,5 +224,75 @@ function PriceItem({
         {value ? formatCents(value) : "N/A"}
       </span>
     </div>
+  );
+}
+
+function gradeColor(grade: number): string {
+  if (grade >= 9) return "bg-green-600 text-white";
+  if (grade >= 8) return "bg-amber-500 text-white";
+  return "bg-zinc-500 text-white";
+}
+
+function confidenceLabel(confidence: "high" | "medium" | "low"): string {
+  if (confidence === "high") return "High confidence";
+  if (confidence === "medium") return "Medium confidence";
+  return "Low confidence";
+}
+
+/**
+ * Determine if a PSA price tier should be highlighted based on the predicted grade.
+ * Returns a ring class if the predicted grade maps to this tier.
+ */
+function getGradeHighlight(
+  tier: number,
+  prediction: PredictedGradeData | null
+): string {
+  if (!prediction) return "";
+  const grade = prediction.grade;
+  const matchesTier =
+    (tier === 10 && grade >= 9.5) ||
+    (tier === 9 && grade >= 8.5 && grade < 9.5) ||
+    (tier === 8 && grade >= 7.5 && grade < 8.5);
+  return matchesTier
+    ? "rounded px-1.5 py-0.5 ring-1 ring-green-500/50 bg-green-500/10"
+    : "";
+}
+
+function PredictedGradeBadge({ prediction }: { prediction: PredictedGradeData }) {
+  const gradeLabel = PSA_GRADE_LABELS[prediction.grade] ?? `PSA ${prediction.grade}`;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger
+          className="flex cursor-default items-center gap-2 text-xs"
+        >
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="h-3 w-3 text-violet-500" />
+            <span className="font-medium text-muted-foreground">Est. Grade:</span>
+            <Badge
+              variant="secondary"
+              className={`px-2 py-0 text-[11px] font-bold ${gradeColor(prediction.grade)}`}
+            >
+              {prediction.grade}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {gradeLabel}
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground/60">
+            Centering: {prediction.centering.frontLR} LR &middot; {prediction.centering.frontTB} TB
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="space-y-1 text-xs">
+            <p className="font-semibold">PSA Grade Prediction (2026 Standards)</p>
+            <p>Centering L/R: {prediction.centering.frontLR}</p>
+            <p>Centering T/B: {prediction.centering.frontTB}</p>
+            <p>{confidenceLabel(prediction.confidence)} &middot; Source: {prediction.source === "ai" ? "AI Vision" : prediction.source === "canvas" ? "Image Analysis" : "Condition-based"}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

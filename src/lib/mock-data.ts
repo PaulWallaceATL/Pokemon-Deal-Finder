@@ -23,6 +23,16 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   case: "Case",
 };
 
+export interface PredictedGradeData {
+  grade: number;
+  centering: {
+    frontLR: string;
+    frontTB: string;
+  };
+  confidence: "high" | "medium" | "low";
+  source: "ai" | "canvas" | "condition";
+}
+
 export interface MockDeal {
   id: string;
   cardName: string;
@@ -56,6 +66,7 @@ export interface MockDeal {
     psa9: number | null;
     psa8: number | null;
   } | null;
+  predictedGrade: PredictedGradeData | null;
   last10Sold: {
     priceCents: number;
     date: string;
@@ -110,6 +121,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 3850,
     },
     psaPrices: { psa10: 15000, psa9: 8500, psa8: 5200 },
+    predictedGrade: { grade: 8.5, centering: { frontLR: "55/45", frontTB: "53/47" }, confidence: "high", source: "ai" },
     last10Sold: [
       { priceCents: 3900, date: "2026-04-09", condition: "NM" },
       { priceCents: 3750, date: "2026-04-08", condition: "NM" },
@@ -152,6 +164,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 5800,
     },
     psaPrices: { psa10: 22000, psa9: 12000, psa8: 7500 },
+    predictedGrade: { grade: 6.5, centering: { frontLR: "58/42", frontTB: "56/44" }, confidence: "medium", source: "ai" },
     last10Sold: [
       { priceCents: 5900, date: "2026-04-09", condition: "NM" },
       { priceCents: 5600, date: "2026-04-07", condition: "LP" },
@@ -194,6 +207,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 2400,
     },
     psaPrices: { psa10: 9500, psa9: 5500, psa8: 3200 },
+    predictedGrade: { grade: 9, centering: { frontLR: "52/48", frontTB: "51/49" }, confidence: "high", source: "ai" },
     last10Sold: [
       { priceCents: 2500, date: "2026-04-08", condition: "NM" },
       { priceCents: 2300, date: "2026-04-06", condition: "NM" },
@@ -236,6 +250,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 24500,
     },
     psaPrices: { psa10: 85000, psa9: 65000, psa8: 38000 },
+    predictedGrade: null,
     last10Sold: [
       { priceCents: 25000, date: "2026-04-09", condition: "NM" },
       { priceCents: 24200, date: "2026-04-07", condition: "NM" },
@@ -278,6 +293,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 4100,
     },
     psaPrices: { psa10: 16000, psa9: 9800, psa8: 6000 },
+    predictedGrade: { grade: 9.5, centering: { frontLR: "51/49", frontTB: "52/48" }, confidence: "high", source: "ai" },
     last10Sold: [
       { priceCents: 4200, date: "2026-04-08", condition: "NM" },
       { priceCents: 3900, date: "2026-04-06", condition: "NM" },
@@ -320,6 +336,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 9200,
     },
     psaPrices: { psa10: 35000, psa9: 22000, psa8: 14000 },
+    predictedGrade: { grade: 7, centering: { frontLR: "62/38", frontTB: "58/42" }, confidence: "medium", source: "canvas" },
     last10Sold: [
       { priceCents: 9400, date: "2026-04-09", condition: "NM" },
       { priceCents: 9000, date: "2026-04-07", condition: "LP" },
@@ -362,6 +379,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 6700,
     },
     psaPrices: { psa10: 25000, psa9: 15000, psa8: 9000 },
+    predictedGrade: { grade: 8, centering: { frontLR: "57/43", frontTB: "54/46" }, confidence: "high", source: "ai" },
     last10Sold: [
       { priceCents: 6800, date: "2026-04-09", condition: "NM" },
       { priceCents: 6500, date: "2026-04-07", condition: "NM" },
@@ -404,6 +422,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 17000,
     },
     psaPrices: { psa10: 55000, psa9: 40000, psa8: 22000 },
+    predictedGrade: { grade: 8.5, centering: { frontLR: "54/46", frontTB: "56/44" }, confidence: "high", source: "ai" },
     last10Sold: [
       { priceCents: 17500, date: "2026-04-09", condition: "NM" },
       { priceCents: 16800, date: "2026-04-07", condition: "NM" },
@@ -446,6 +465,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 6000,
     },
     psaPrices: { psa10: 22000, psa9: 14000, psa8: 8500 },
+    predictedGrade: { grade: 6, centering: { frontLR: "63/37", frontTB: "60/40" }, confidence: "medium", source: "canvas" },
     last10Sold: [
       { priceCents: 6200, date: "2026-04-08", condition: "NM" },
       { priceCents: 5800, date: "2026-04-06", condition: "LP" },
@@ -488,6 +508,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 10500,
     },
     psaPrices: { psa10: 40000, psa9: 25000, psa8: 15000 },
+    predictedGrade: { grade: 9, centering: { frontLR: "53/47", frontTB: "52/48" }, confidence: "high", source: "ai" },
     last10Sold: [
       { priceCents: 10800, date: "2026-04-09", condition: "NM" },
       { priceCents: 10200, date: "2026-04-07", condition: "NM" },
@@ -530,6 +551,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 2800,
     },
     psaPrices: { psa10: 12000, psa9: 7000, psa8: 4200 },
+    predictedGrade: { grade: 7, centering: { frontLR: "60/40", frontTB: "58/42" }, confidence: "low", source: "condition" },
     last10Sold: [
       { priceCents: 2900, date: "2026-04-09", condition: "NM" },
       { priceCents: 2700, date: "2026-04-07", condition: "NM" },
@@ -572,6 +594,7 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 1400,
     },
     psaPrices: { psa10: 5500, psa9: 3500, psa8: 2000 },
+    predictedGrade: { grade: 7, centering: { frontLR: "59/41", frontTB: "55/45" }, confidence: "low", source: "condition" },
     last10Sold: [
       { priceCents: 1400, date: "2026-04-08", condition: "NM" },
       { priceCents: 1350, date: "2026-04-05", condition: "NM" },
@@ -609,6 +632,7 @@ export const mockDeals: MockDeal[] = [
     productType: "etb",
     prices: { tcgplayer: 4300, pricechartingRaw: 4500, pricechartingGraded: null, ebaySoldAvg: 4700 },
     psaPrices: null,
+    predictedGrade: null,
     last10Sold: [
       { priceCents: 4500, date: "2026-04-09", condition: "Sealed" },
       { priceCents: 4600, date: "2026-04-07", condition: "Sealed" },
@@ -646,6 +670,7 @@ export const mockDeals: MockDeal[] = [
     productType: "booster-box",
     prices: { tcgplayer: 12000, pricechartingRaw: 12800, pricechartingGraded: null, ebaySoldAvg: 12700 },
     psaPrices: null,
+    predictedGrade: null,
     last10Sold: [
       { priceCents: 12500, date: "2026-04-08", condition: "Sealed" },
       { priceCents: 12200, date: "2026-04-06", condition: "Sealed" },
@@ -683,6 +708,7 @@ export const mockDeals: MockDeal[] = [
     productType: "upc",
     prices: { tcgplayer: 10200, pricechartingRaw: 10800, pricechartingGraded: null, ebaySoldAvg: 10500 },
     psaPrices: null,
+    predictedGrade: null,
     last10Sold: [
       { priceCents: 10500, date: "2026-04-09", condition: "Sealed" },
       { priceCents: 10200, date: "2026-04-06", condition: "Sealed" },
@@ -720,6 +746,7 @@ export const mockDeals: MockDeal[] = [
     productType: "booster-bundle",
     prices: { tcgplayer: 5000, pricechartingRaw: 5400, pricechartingGraded: null, ebaySoldAvg: 5200 },
     psaPrices: null,
+    predictedGrade: null,
     last10Sold: [
       { priceCents: 5200, date: "2026-04-08", condition: "Sealed" },
       { priceCents: 5000, date: "2026-04-05", condition: "Sealed" },
@@ -757,6 +784,7 @@ export const mockDeals: MockDeal[] = [
     productType: "tin",
     prices: { tcgplayer: 2900, pricechartingRaw: 3100, pricechartingGraded: null, ebaySoldAvg: 3000 },
     psaPrices: null,
+    predictedGrade: null,
     last10Sold: [
       { priceCents: 3000, date: "2026-04-07", condition: "Sealed" },
       { priceCents: 2900, date: "2026-04-04", condition: "Sealed" },
