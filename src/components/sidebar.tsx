@@ -25,8 +25,24 @@ const POKEMON_SETS = [
   { value: "cel25", label: "Celebrations" },
 ];
 
-interface SidebarFilters {
+const PRODUCT_TYPES = [
+  { value: "all", label: "All Types" },
+  { value: "raw", label: "Raw Cards" },
+  { value: "graded", label: "Graded / Slabs (PSA)" },
+  { value: "sealed", label: "All Sealed Products" },
+  { value: "etb", label: "Elite Trainer Box" },
+  { value: "booster-box", label: "Booster Box" },
+  { value: "booster-bundle", label: "Booster Bundle" },
+  { value: "booster-pack", label: "Booster Pack" },
+  { value: "upc", label: "Ultra Premium Collection" },
+  { value: "tin", label: "Tin" },
+  { value: "blister", label: "Blister Pack" },
+  { value: "case", label: "Case" },
+];
+
+export interface SidebarFilters {
   set: string;
+  productType: string;
   minDiscount: string;
   maxPrice: string;
   minPrice: string;
@@ -36,6 +52,13 @@ interface SidebarProps {
   filters: SidebarFilters;
   onFilterChange: (filters: SidebarFilters) => void;
 }
+
+const SEALED_TYPES = new Set([
+  "etb", "tin", "blister", "upc", "booster-bundle",
+  "booster-box", "booster-pack", "case",
+]);
+
+export { SEALED_TYPES };
 
 export function Sidebar({ filters, onFilterChange }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -61,6 +84,27 @@ export function Sidebar({ filters, onFilterChange }: SidebarProps) {
           isOpen ? "block" : "hidden"
         } w-full shrink-0 space-y-6 lg:block lg:w-60`}
       >
+        <div>
+          <h3 className="mb-2 text-sm font-semibold">Product Type</h3>
+          <Select
+            value={filters.productType}
+            onValueChange={(v) => updateFilter("productType", v ?? "all")}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              {PRODUCT_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
         <div>
           <h3 className="mb-2 text-sm font-semibold">Card Set</h3>
           <Select
@@ -124,6 +168,7 @@ export function Sidebar({ filters, onFilterChange }: SidebarProps) {
           onClick={() =>
             onFilterChange({
               set: "all",
+              productType: "all",
               minDiscount: "",
               maxPrice: "",
               minPrice: "",

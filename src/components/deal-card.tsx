@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { buttonVariants } from "@/components/ui/button";
-import type { MockDeal } from "@/lib/mock-data";
+import { PRODUCT_TYPE_LABELS, type MockDeal } from "@/lib/mock-data";
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -78,6 +78,18 @@ export function DealCard({ deal }: DealCardProps) {
                 {deal.cardSet} &middot; {deal.cardNumber}
               </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                <Badge
+                  variant="secondary"
+                  className={`text-[10px] px-1.5 py-0 ${
+                    deal.productType === "graded"
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                      : deal.productType !== "raw"
+                        ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
+                        : ""
+                  }`}
+                >
+                  {PRODUCT_TYPE_LABELS[deal.productType]}
+                </Badge>
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                   {deal.cardSeries}
                 </Badge>

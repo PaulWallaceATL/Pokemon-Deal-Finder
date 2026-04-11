@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar, SEALED_TYPES, type SidebarFilters } from "@/components/sidebar";
 import { DealCard } from "@/components/deal-card";
 import { mockDeals, type MockDeal } from "@/lib/mock-data";
 
@@ -42,8 +42,9 @@ function sortDeals(deals: MockDeal[], sort: SortOption): MockDeal[] {
 export function DealFeed() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("discount-desc");
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<SidebarFilters>({
     set: "all",
+    productType: "all",
     minDiscount: "",
     maxPrice: "",
     minPrice: "",
@@ -59,6 +60,14 @@ export function DealFeed() {
           d.cardName.toLowerCase().includes(q) ||
           d.cardSet.toLowerCase().includes(q)
       );
+    }
+
+    if (filters.productType !== "all") {
+      if (filters.productType === "sealed") {
+        deals = deals.filter((d) => SEALED_TYPES.has(d.productType));
+      } else {
+        deals = deals.filter((d) => d.productType === filters.productType);
+      }
     }
 
     if (filters.set !== "all") {
