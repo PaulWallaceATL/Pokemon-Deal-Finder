@@ -1,4 +1,6 @@
 const USE_MOCK = process.env.USE_MOCK_DATA === "true";
+const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN;
+const APIFY_FB_ACTOR_ID = process.env.APIFY_FB_ACTOR_ID;
 
 export interface FbMarketplaceListing {
   listingId: string;
@@ -41,21 +43,10 @@ const mockListings: FbMarketplaceListing[] = [
 ];
 
 /**
- * Search Facebook Marketplace for Pokemon card listings.
+ * Search Facebook Marketplace for Pokemon card listings via Apify.
  *
- * IMPORTANT: Facebook Marketplace has no public API. In production this
- * requires a headless browser (Puppeteer/Playwright) running on a server
- * with a logged-in Facebook session. The implementation below uses their
- * public search URL which returns limited results without authentication.
- *
- * For a production deployment you would:
- * 1. Run a Playwright instance with a persistent browser context
- * 2. Authenticate with a Facebook account
- * 3. Navigate to marketplace search and parse the results
- * 4. Handle CAPTCHAs and rate limiting
- *
- * The scraping approach below works for public/unauthenticated results
- * but yields fewer listings than an authenticated session.
+ * Uses the Apify actor API to run a Facebook Marketplace scraper.
+ * Falls back to empty results if Apify credentials are not configured.
  */
 export async function searchFacebookMarketplace(
   cardName: string,
@@ -68,80 +59,89 @@ export async function searchFacebookMarketplace(
     }));
   }
 
-  // Facebook Marketplace search via their public GraphQL-backed search page.
-  // This fetches the HTML and attempts to parse listing data from the
-  // embedded JSON data blobs that FB inlines into the page.
+  if (!APIFY_API_TOKEN || !APIFY_FB_ACTOR_ID) {
+    console.warn(
+      "Apify credentials not configured, skipping Facebook Marketplace"
+    );
+    return [];
+  }
+
+  return fetchFromApify(cardName, cardSet);
+}
+
+async function fetchFromApify(
+  cardName: string,
+  cardSet: string | undefined
+): Promise<FbMarketplaceListing[]> {
   const query = cardSet ? `${cardName} ${cardSet}` : cardName;
-  const searchUrl = `https://www.facebook.com/marketplace/search/?query=${encodeURIComponent(query)}&category=pokemon-cards`;
 
   try {
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-      redirect: "follow",
+    // Run the actor synchronously and get dataset items directly
+    const url = `https://api.apify.com/v2/acts/${APIFY_FB_ACTOR_ID}/run-sync-get-dataset-items?token=${APIFY_API_TOKEN}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        searchQuery: query,
+        maxItems: 10,
+        location: "United States",
+        category: "search",
+      }),
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!response.ok) {
-      console.warn(`Facebook Marketplace returned ${response.status}, using empty results`);
+      console.warn(
+        `Apify FB actor returned ${response.status}: ${await response.text()}`
+      );
       return [];
     }
 
-    const html = await response.text();
-    return parseFacebookListings(html, query);
+    const items: ApifyFbItem[] = await response.json();
+    return items
+      .filter((item) => item.price != null)
+      .slice(0, 10)
+      .map(apifyItemToListing);
   } catch (error) {
-    console.warn("Facebook Marketplace scrape failed:", error);
+    console.warn("Facebook Marketplace Apify fetch failed:", error);
     return [];
   }
 }
 
-/**
- * Parse Facebook Marketplace listings from page HTML.
- * FB embeds listing data as JSON in script tags and data attributes.
- */
-function parseFacebookListings(
-  html: string,
-  query: string
-): FbMarketplaceListing[] {
-  const listings: FbMarketplaceListing[] = [];
+interface ApifyFbItem {
+  id?: string;
+  title?: string;
+  price?: number | string;
+  url?: string;
+  imageUrl?: string;
+  image?: string;
+  sellerName?: string;
+  seller?: { name?: string };
+  location?: string | { city?: string; state?: string };
+  address?: string;
+}
 
-  // FB often embeds structured data in the page as JSON blobs
-  // Look for marketplace listing data patterns
-  const pricePattern =
-    /\{"__typename":"MarketplaceListing".*?"listing_price":\{"amount":"(\d+(?:\.\d+)?)"/g;
-  const matches = html.matchAll(pricePattern);
+function apifyItemToListing(item: ApifyFbItem): FbMarketplaceListing {
+  const priceNum =
+    typeof item.price === "string"
+      ? parseFloat(item.price.replace(/[^0-9.]/g, ""))
+      : (item.price ?? 0);
 
-  for (const match of matches) {
-    if (listings.length >= 10) break;
+  const location =
+    typeof item.location === "string"
+      ? item.location
+      : item.location
+        ? `${item.location.city ?? ""}, ${item.location.state ?? ""}`.trim()
+        : item.address ?? "Unknown";
 
-    const priceDollars = parseFloat(match[1]);
-    const priceCents = Math.round(priceDollars * 100);
-
-    // Extract listing ID from surrounding context
-    const contextStart = Math.max(0, match.index! - 200);
-    const context = html.slice(contextStart, match.index! + match[0].length + 500);
-
-    const idMatch = context.match(/"listing_id":"(\d+)"/);
-    const titleMatch = context.match(/"marketplace_listing_title":"([^"]+)"/);
-    const imageMatch = context.match(/"uri":"(https:\/\/[^"]*(?:jpg|jpeg|png|webp)[^"]*)"/);
-    const locationMatch = context.match(/"location_text":"([^"]+)"/);
-
-    const listingId = idMatch?.[1] ?? `fb-${Date.now()}-${listings.length}`;
-
-    listings.push({
-      listingId,
-      title: titleMatch?.[1] ?? `${query} - Facebook Listing`,
-      priceCents,
-      url: `https://www.facebook.com/marketplace/item/${listingId}`,
-      imageUrl: imageMatch?.[1] ?? "",
-      sellerName: "Facebook Seller",
-      location: locationMatch?.[1] ?? "Unknown",
-    });
-  }
-
-  return listings;
+  return {
+    listingId: item.id ?? `fb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    title: item.title ?? "Facebook Listing",
+    priceCents: Math.round(priceNum * 100),
+    url: item.url ?? `https://www.facebook.com/marketplace/item/${item.id ?? ""}`,
+    imageUrl: item.imageUrl ?? item.image ?? "",
+    sellerName: item.sellerName ?? item.seller?.name ?? "Facebook Seller",
+    location,
+  };
 }

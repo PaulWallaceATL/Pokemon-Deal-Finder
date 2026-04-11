@@ -10,10 +10,15 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import type { MockPriceHistory } from "@/lib/mock-data";
+interface PriceDataPoint {
+  date: string;
+  tcgplayer: number | null;
+  pricechartingRaw: number | null;
+  ebaySoldAvg: number | null;
+}
 
 interface PriceChartProps {
-  data: MockPriceHistory[];
+  data: PriceDataPoint[];
 }
 
 function formatCentsAxis(value: number): string {

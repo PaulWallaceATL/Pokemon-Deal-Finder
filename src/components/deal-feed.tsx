@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,9 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sidebar, SEALED_TYPES, type SidebarFilters } from "@/components/sidebar";
+import { Sidebar, type SidebarFilters } from "@/components/sidebar";
 import { DealCard } from "@/components/deal-card";
-import { mockDeals, type MockDeal } from "@/lib/mock-data";
+import type { Deal } from "@/lib/deals/types";
+import { dealRowToUI } from "@/lib/deals/types";
 
 type SortOption = "discount-desc" | "price-asc" | "price-desc" | "recent";
 
@@ -23,19 +24,16 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "recent", label: "Most Recent" },
 ];
 
-function sortDeals(deals: MockDeal[], sort: SortOption): MockDeal[] {
-  const sorted = [...deals];
+function sortToParams(sort: SortOption): { sortBy: string; sortDir: string } {
   switch (sort) {
     case "discount-desc":
-      return sorted.sort((a, b) => b.discountPct - a.discountPct);
+      return { sortBy: "discount_pct", sortDir: "desc" };
     case "price-asc":
-      return sorted.sort((a, b) => a.ebayPriceCents - b.ebayPriceCents);
+      return { sortBy: "ebay_price_cents", sortDir: "asc" };
     case "price-desc":
-      return sorted.sort((a, b) => b.ebayPriceCents - a.ebayPriceCents);
+      return { sortBy: "ebay_price_cents", sortDir: "desc" };
     case "recent":
-      return sorted.sort(
-        (a, b) => new Date(b.foundAt).getTime() - new Date(a.foundAt).getTime()
-      );
+      return { sortBy: "found_at", sortDir: "desc" };
   }
 }
 
@@ -49,52 +47,44 @@ export function DealFeed() {
     maxPrice: "",
     minPrice: "",
   });
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredDeals = useMemo(() => {
-    let deals = mockDeals.filter((d) => d.isActive);
+  const fetchDeals = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { sortBy, sortDir } = sortToParams(sort);
+      const params = new URLSearchParams({
+        sortBy,
+        sortDir,
+        limit: "50",
+      });
 
-    if (search) {
-      const q = search.toLowerCase();
-      deals = deals.filter(
-        (d) =>
-          d.cardName.toLowerCase().includes(q) ||
-          d.cardSet.toLowerCase().includes(q)
-      );
+      if (search) params.set("search", search);
+      if (filters.productType !== "all")
+        params.set("productType", filters.productType);
+      if (filters.set !== "all") params.set("set", filters.set);
+      if (filters.minDiscount) params.set("minDiscount", filters.minDiscount);
+      if (filters.minPrice) params.set("minPrice", filters.minPrice);
+      if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+
+      const res = await fetch(`/api/deals?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch deals");
+
+      const data = await res.json();
+      setDeals((data.deals ?? []).map(dealRowToUI));
+    } catch (err) {
+      console.error("Failed to load deals:", err);
+      setDeals([]);
+    } finally {
+      setIsLoading(false);
     }
-
-    if (filters.productType !== "all") {
-      if (filters.productType === "sealed") {
-        deals = deals.filter((d) => SEALED_TYPES.has(d.productType));
-      } else {
-        deals = deals.filter((d) => d.productType === filters.productType);
-      }
-    }
-
-    if (filters.set !== "all") {
-      deals = deals.filter(
-        (d) =>
-          d.pokemonTcgId.startsWith(filters.set) ||
-          d.cardSet.toLowerCase().includes(filters.set.toLowerCase())
-      );
-    }
-
-    if (filters.minDiscount) {
-      const min = parseFloat(filters.minDiscount);
-      if (!isNaN(min)) deals = deals.filter((d) => d.discountPct >= min);
-    }
-
-    if (filters.minPrice) {
-      const min = parseFloat(filters.minPrice) * 100;
-      if (!isNaN(min)) deals = deals.filter((d) => d.ebayPriceCents >= min);
-    }
-
-    if (filters.maxPrice) {
-      const max = parseFloat(filters.maxPrice) * 100;
-      if (!isNaN(max)) deals = deals.filter((d) => d.ebayPriceCents <= max);
-    }
-
-    return sortDeals(deals, sort);
   }, [search, sort, filters]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchDeals, 300);
+    return () => clearTimeout(timer);
+  }, [fetchDeals]);
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -113,7 +103,7 @@ export function DealFeed() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">
-              {filteredDeals.length} deal{filteredDeals.length !== 1 && "s"}
+              {deals.length} deal{deals.length !== 1 && "s"}
             </span>
             <Select
               value={sort}
@@ -133,7 +123,11 @@ export function DealFeed() {
           </div>
         </div>
 
-        {filteredDeals.length === 0 ? (
+        {isLoading ? (
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : deals.length === 0 ? (
           <div className="flex h-40 items-center justify-center rounded-lg border border-dashed">
             <p className="text-sm text-muted-foreground">
               No deals match your filters.
@@ -141,7 +135,7 @@ export function DealFeed() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {filteredDeals.map((deal) => (
+            {deals.map((deal) => (
               <DealCard key={deal.id} deal={deal} />
             ))}
           </div>

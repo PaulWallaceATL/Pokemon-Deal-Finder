@@ -7,16 +7,24 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { mockSearchResults, type MockSearchResult } from "@/lib/mock-data";
+
+export interface SearchResultCard {
+  pokemonTcgId: string;
+  name: string;
+  set: string;
+  imageUrl: string;
+  number: string;
+  rarity: string;
+}
 
 interface CardSearchProps {
-  onTrack: (card: MockSearchResult) => void;
+  onTrack: (card: SearchResultCard) => void;
   trackedIds: Set<string>;
 }
 
 export function CardSearch({ onTrack, trackedIds }: CardSearchProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MockSearchResult[]>([]);
+  const [results, setResults] = useState<SearchResultCard[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -25,16 +33,30 @@ export function CardSearch({ onTrack, trackedIds }: CardSearchProps) {
     setIsSearching(true);
     setHasSearched(true);
 
-    // Simulate API delay
-    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const res = await fetch(
+        `/api/cards/search?q=${encodeURIComponent(query.trim())}`
+      );
+      if (!res.ok) throw new Error("Search failed");
 
-    const filtered = mockSearchResults.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query.toLowerCase()) ||
-        c.set.toLowerCase().includes(query.toLowerCase())
-    );
-    setResults(filtered);
-    setIsSearching(false);
+      const data = await res.json();
+      const cards: SearchResultCard[] = (data.cards ?? []).map(
+        (c: { id: string; name: string; set: string; imageSmall: string; imageLarge: string; number: string; rarity: string }) => ({
+          pokemonTcgId: c.id,
+          name: c.name,
+          set: c.set,
+          imageUrl: c.imageLarge || c.imageSmall,
+          number: c.number,
+          rarity: c.rarity,
+        })
+      );
+      setResults(cards);
+    } catch (err) {
+      console.error("Card search failed:", err);
+      setResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (

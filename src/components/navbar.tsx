@@ -1,12 +1,44 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Zap, Search, LayoutDashboard, Bookmark } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Zap, LayoutDashboard, Bookmark, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export function Navbar() {
+  const [user, setUser] = useState<User | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : "PD";
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
@@ -33,19 +65,28 @@ export function Navbar() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="md:hidden">
-            <Search className="h-5 w-5" />
-          </Button>
           <ThemeToggle />
-          <Link
-            href="/login"
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
-          >
-            Sign in
-          </Link>
-          <Avatar className="h-8 w-8 cursor-pointer">
-            <AvatarFallback className="text-xs">PD</AvatarFallback>
-          </Avatar>
+          {user ? (
+            <>
+              <span className="hidden text-sm text-muted-foreground sm:inline">
+                {user.email}
+              </span>
+              <Avatar className="h-8 w-8 cursor-pointer">
+                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+              </Avatar>
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                <LogOut className="mr-1 h-4 w-4" />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </div>
     </header>

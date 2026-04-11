@@ -13,7 +13,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PRODUCT_TYPE_LABELS, type MockDeal, type PredictedGradeData } from "@/lib/mock-data";
+import { PRODUCT_TYPE_LABELS, type PredictedGradeData } from "@/lib/mock-data";
+import type { Deal } from "@/lib/deals/types";
 import { PSA_GRADE_LABELS } from "@/lib/grading/psa-standards";
 
 function formatCents(cents: number): string {
@@ -28,29 +29,12 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function computeAvg(sold: MockDeal["last10Sold"]): number {
-  if (sold.length === 0) return 0;
-  return Math.round(sold.reduce((s, i) => s + i.priceCents, 0) / sold.length);
-}
-
-function soldDateRange(sold: MockDeal["last10Sold"]): string {
-  if (sold.length === 0) return "";
-  const fmt = (d: string) => {
-    const date = new Date(d + "T00:00:00");
-    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-  };
-  const newest = fmt(sold[0].date);
-  const oldest = fmt(sold[sold.length - 1].date);
-  return newest === oldest ? newest : `${oldest} – ${newest}`;
-}
 
 interface DealCardProps {
-  deal: MockDeal;
+  deal: Deal;
 }
 
 export function DealCard({ deal }: DealCardProps) {
-  const last10Avg = computeAvg(deal.last10Sold);
-  const dateRange = soldDateRange(deal.last10Sold);
 
   return (
     <Card className="group relative overflow-hidden transition-shadow hover:shadow-lg">
@@ -133,13 +117,8 @@ export function DealCard({ deal }: DealCardProps) {
               <PriceItem label="TCGPlayer" value={deal.prices.tcgplayer} />
               <PriceItem label="PC Raw" value={deal.prices.pricechartingRaw} />
               <PriceItem label="eBay Sold Avg" value={deal.prices.ebaySoldAvg} />
-              <PriceItem label="Last 10 Avg" value={last10Avg || null} />
+              <PriceItem label="PC Graded" value={deal.prices.pricechartingGraded} />
             </div>
-            {dateRange && (
-              <p className="mt-1.5 text-[10px] text-muted-foreground">
-                Last 10 sold: {dateRange}
-              </p>
-            )}
           </div>
 
           {/* PSA graded prices + predicted grade */}
