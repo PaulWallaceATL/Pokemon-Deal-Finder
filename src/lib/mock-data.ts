@@ -29,7 +29,7 @@ export interface MockDeal {
     psa9: number | null;
     psa8: number | null;
   } | null;
-  last5Sold: {
+  last10Sold: {
     priceCents: number;
     date: string;
     condition: string;
@@ -81,12 +81,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 3850,
     },
     psaPrices: { psa10: 15000, psa9: 8500, psa8: 5200 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 3900, date: "2026-04-09", condition: "NM" },
       { priceCents: 3750, date: "2026-04-08", condition: "NM" },
       { priceCents: 4100, date: "2026-04-06", condition: "NM" },
       { priceCents: 3600, date: "2026-04-04", condition: "LP" },
       { priceCents: 3900, date: "2026-04-02", condition: "NM" },
+      { priceCents: 4050, date: "2026-03-25", condition: "NM" },
+      { priceCents: 3700, date: "2026-03-18", condition: "LP" },
+      { priceCents: 4200, date: "2026-03-10", condition: "NM" },
+      { priceCents: 3850, date: "2026-02-28", condition: "NM" },
+      { priceCents: 4000, date: "2026-02-15", condition: "NM" },
     ],
   },
   {
@@ -116,12 +121,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 5800,
     },
     psaPrices: { psa10: 22000, psa9: 12000, psa8: 7500 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 5900, date: "2026-04-09", condition: "NM" },
       { priceCents: 5600, date: "2026-04-07", condition: "LP" },
       { priceCents: 6100, date: "2026-04-05", condition: "NM" },
       { priceCents: 5700, date: "2026-04-03", condition: "NM" },
       { priceCents: 5700, date: "2026-04-01", condition: "LP" },
+      { priceCents: 5850, date: "2026-03-22", condition: "NM" },
+      { priceCents: 6000, date: "2026-03-14", condition: "NM" },
+      { priceCents: 5500, date: "2026-03-05", condition: "LP" },
+      { priceCents: 5950, date: "2026-02-20", condition: "NM" },
+      { priceCents: 6200, date: "2026-02-08", condition: "NM" },
     ],
   },
   {
@@ -151,12 +161,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 2400,
     },
     psaPrices: { psa10: 9500, psa9: 5500, psa8: 3200 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 2500, date: "2026-04-08", condition: "NM" },
       { priceCents: 2300, date: "2026-04-06", condition: "NM" },
       { priceCents: 2450, date: "2026-04-04", condition: "NM" },
       { priceCents: 2200, date: "2026-04-02", condition: "LP" },
       { priceCents: 2550, date: "2026-03-30", condition: "NM" },
+      { priceCents: 2400, date: "2026-03-20", condition: "NM" },
+      { priceCents: 2350, date: "2026-03-11", condition: "LP" },
+      { priceCents: 2600, date: "2026-03-01", condition: "NM" },
+      { priceCents: 2300, date: "2026-02-18", condition: "NM" },
+      { priceCents: 2500, date: "2026-01-30", condition: "NM" },
     ],
   },
   {
@@ -186,12 +201,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 24500,
     },
     psaPrices: { psa10: 85000, psa9: 65000, psa8: 38000 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 25000, date: "2026-04-09", condition: "NM" },
       { priceCents: 24200, date: "2026-04-07", condition: "NM" },
       { priceCents: 23800, date: "2026-04-05", condition: "LP" },
       { priceCents: 25500, date: "2026-04-03", condition: "NM" },
       { priceCents: 24000, date: "2026-04-01", condition: "NM" },
+      { priceCents: 24800, date: "2026-03-18", condition: "NM" },
+      { priceCents: 23500, date: "2026-03-06", condition: "LP" },
+      { priceCents: 25200, date: "2026-02-22", condition: "NM" },
+      { priceCents: 24600, date: "2026-02-10", condition: "NM" },
+      { priceCents: 23900, date: "2026-01-25", condition: "NM" },
     ],
   },
   {
@@ -221,12 +241,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 4100,
     },
     psaPrices: { psa10: 16000, psa9: 9800, psa8: 6000 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 4200, date: "2026-04-08", condition: "NM" },
       { priceCents: 3900, date: "2026-04-06", condition: "NM" },
       { priceCents: 4300, date: "2026-04-04", condition: "Mint" },
       { priceCents: 4000, date: "2026-04-02", condition: "NM" },
       { priceCents: 4100, date: "2026-03-31", condition: "NM" },
+      { priceCents: 4250, date: "2026-03-19", condition: "NM" },
+      { priceCents: 3800, date: "2026-03-08", condition: "LP" },
+      { priceCents: 4400, date: "2026-02-25", condition: "NM" },
+      { priceCents: 4050, date: "2026-02-12", condition: "NM" },
+      { priceCents: 4150, date: "2026-01-28", condition: "NM" },
     ],
   },
   {
@@ -256,12 +281,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 9200,
     },
     psaPrices: { psa10: 35000, psa9: 22000, psa8: 14000 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 9400, date: "2026-04-09", condition: "NM" },
       { priceCents: 9000, date: "2026-04-07", condition: "LP" },
       { priceCents: 9500, date: "2026-04-05", condition: "NM" },
       { priceCents: 8800, date: "2026-04-03", condition: "LP" },
       { priceCents: 9300, date: "2026-04-01", condition: "NM" },
+      { priceCents: 9600, date: "2026-03-21", condition: "NM" },
+      { priceCents: 8900, date: "2026-03-10", condition: "LP" },
+      { priceCents: 9700, date: "2026-02-27", condition: "NM" },
+      { priceCents: 9100, date: "2026-02-14", condition: "NM" },
+      { priceCents: 9200, date: "2026-01-31", condition: "NM" },
     ],
   },
   {
@@ -291,12 +321,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 6700,
     },
     psaPrices: { psa10: 25000, psa9: 15000, psa8: 9000 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 6800, date: "2026-04-09", condition: "NM" },
       { priceCents: 6500, date: "2026-04-07", condition: "NM" },
       { priceCents: 7000, date: "2026-04-05", condition: "NM" },
       { priceCents: 6600, date: "2026-04-03", condition: "LP" },
       { priceCents: 6600, date: "2026-04-01", condition: "NM" },
+      { priceCents: 6900, date: "2026-03-20", condition: "NM" },
+      { priceCents: 6400, date: "2026-03-09", condition: "LP" },
+      { priceCents: 7100, date: "2026-02-24", condition: "NM" },
+      { priceCents: 6700, date: "2026-02-11", condition: "NM" },
+      { priceCents: 6850, date: "2026-01-27", condition: "NM" },
     ],
   },
   {
@@ -326,12 +361,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 17000,
     },
     psaPrices: { psa10: 55000, psa9: 40000, psa8: 22000 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 17500, date: "2026-04-09", condition: "NM" },
       { priceCents: 16800, date: "2026-04-07", condition: "NM" },
       { priceCents: 17200, date: "2026-04-05", condition: "NM" },
       { priceCents: 16500, date: "2026-04-03", condition: "NM" },
       { priceCents: 17000, date: "2026-04-01", condition: "LP" },
+      { priceCents: 17300, date: "2026-03-19", condition: "NM" },
+      { priceCents: 16200, date: "2026-03-07", condition: "LP" },
+      { priceCents: 17800, date: "2026-02-22", condition: "NM" },
+      { priceCents: 16900, date: "2026-02-09", condition: "NM" },
+      { priceCents: 17100, date: "2026-01-24", condition: "NM" },
     ],
   },
   {
@@ -361,12 +401,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 6000,
     },
     psaPrices: { psa10: 22000, psa9: 14000, psa8: 8500 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 6200, date: "2026-04-08", condition: "NM" },
       { priceCents: 5800, date: "2026-04-06", condition: "LP" },
       { priceCents: 6100, date: "2026-04-04", condition: "NM" },
       { priceCents: 5900, date: "2026-04-02", condition: "NM" },
       { priceCents: 6000, date: "2026-03-31", condition: "LP" },
+      { priceCents: 6300, date: "2026-03-17", condition: "NM" },
+      { priceCents: 5700, date: "2026-03-04", condition: "LP" },
+      { priceCents: 6400, date: "2026-02-19", condition: "NM" },
+      { priceCents: 6100, date: "2026-02-06", condition: "NM" },
+      { priceCents: 5900, date: "2026-01-22", condition: "NM" },
     ],
   },
   {
@@ -396,12 +441,17 @@ export const mockDeals: MockDeal[] = [
       ebaySoldAvg: 10500,
     },
     psaPrices: { psa10: 40000, psa9: 25000, psa8: 15000 },
-    last5Sold: [
+    last10Sold: [
       { priceCents: 10800, date: "2026-04-09", condition: "NM" },
       { priceCents: 10200, date: "2026-04-07", condition: "NM" },
       { priceCents: 10600, date: "2026-04-05", condition: "NM" },
       { priceCents: 10400, date: "2026-04-03", condition: "LP" },
       { priceCents: 10500, date: "2026-04-01", condition: "NM" },
+      { priceCents: 10900, date: "2026-03-18", condition: "NM" },
+      { priceCents: 10100, date: "2026-03-06", condition: "LP" },
+      { priceCents: 11000, date: "2026-02-21", condition: "NM" },
+      { priceCents: 10300, date: "2026-02-08", condition: "NM" },
+      { priceCents: 10700, date: "2026-01-23", condition: "NM" },
     ],
   },
 ];

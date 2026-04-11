@@ -21,9 +21,20 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function computeLast5Avg(sold: MockDeal["last5Sold"]): number {
+function computeAvg(sold: MockDeal["last10Sold"]): number {
   if (sold.length === 0) return 0;
   return Math.round(sold.reduce((s, i) => s + i.priceCents, 0) / sold.length);
+}
+
+function soldDateRange(sold: MockDeal["last10Sold"]): string {
+  if (sold.length === 0) return "";
+  const fmt = (d: string) => {
+    const date = new Date(d + "T00:00:00");
+    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  };
+  const newest = fmt(sold[0].date);
+  const oldest = fmt(sold[sold.length - 1].date);
+  return newest === oldest ? newest : `${oldest} – ${newest}`;
 }
 
 interface DealCardProps {
@@ -31,7 +42,8 @@ interface DealCardProps {
 }
 
 export function DealCard({ deal }: DealCardProps) {
-  const last5Avg = computeLast5Avg(deal.last5Sold);
+  const last10Avg = computeAvg(deal.last10Sold);
+  const dateRange = soldDateRange(deal.last10Sold);
 
   return (
     <Card className="group relative overflow-hidden transition-shadow hover:shadow-lg">
@@ -97,11 +109,18 @@ export function DealCard({ deal }: DealCardProps) {
           </div>
 
           {/* Price comparison grid */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border bg-muted/40 px-3 py-2 text-xs sm:grid-cols-4">
-            <PriceItem label="TCGPlayer" value={deal.prices.tcgplayer} />
-            <PriceItem label="PC Raw" value={deal.prices.pricechartingRaw} />
-            <PriceItem label="eBay Sold Avg" value={deal.prices.ebaySoldAvg} />
-            <PriceItem label="Last 5 Avg" value={last5Avg || null} />
+          <div className="rounded-md border bg-muted/40 px-3 py-2">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+              <PriceItem label="TCGPlayer" value={deal.prices.tcgplayer} />
+              <PriceItem label="PC Raw" value={deal.prices.pricechartingRaw} />
+              <PriceItem label="eBay Sold Avg" value={deal.prices.ebaySoldAvg} />
+              <PriceItem label="Last 10 Avg" value={last10Avg || null} />
+            </div>
+            {dateRange && (
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                Last 10 sold: {dateRange}
+              </p>
+            )}
           </div>
 
           {/* PSA graded prices (if available) */}
