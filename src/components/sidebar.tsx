@@ -7,23 +7,14 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-
-const POKEMON_SETS = [
-  { value: "all", label: "All Sets" },
-  { value: "sv8", label: "Surging Sparks" },
-  { value: "sv7", label: "Stellar Crown" },
-  { value: "sv6", label: "Twilight Masquerade" },
-  { value: "sv5", label: "Temporal Forces" },
-  { value: "sv4", label: "Paradox Rift" },
-  { value: "sv3", label: "Obsidian Flames" },
-  { value: "swsh12pt5", label: "Crown Zenith" },
-  { value: "cel25", label: "Celebrations" },
-];
+import { POKEMON_SETS, POKEMON_SET_ERAS } from "@/lib/pokemon-sets";
 
 const PRODUCT_TYPES = [
   { value: "all", label: "All Types" },
@@ -114,12 +105,24 @@ export function Sidebar({ filters, onFilterChange }: SidebarProps) {
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select set" />
             </SelectTrigger>
-            <SelectContent>
-              {POKEMON_SETS.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
+            <SelectContent className="max-h-80">
+              <SelectItem value="all">All Sets</SelectItem>
+              {POKEMON_SET_ERAS.map((era) => {
+                const setsInEra = POKEMON_SETS.filter((s) => s.era === era);
+                if (setsInEra.length === 0) return null;
+                return (
+                  <SelectGroup key={era}>
+                    <SelectLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      {era}
+                    </SelectLabel>
+                    {setsInEra.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
