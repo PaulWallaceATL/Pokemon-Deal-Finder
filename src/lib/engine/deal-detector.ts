@@ -2,15 +2,27 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import type { PriceSourceName, ScanResult } from "./types";
 import { calculateBlendedPrice, evaluateDeal } from "./price-aggregator";
-import { searchEbayListings } from "@/lib/apis/ebay-browse";
+import { searchEbayListings, type EbayListing } from "@/lib/apis/ebay-browse";
 import { getEbaySoldAverage } from "@/lib/apis/ebay-sold";
 import { getCardById } from "@/lib/apis/pokemon-tcg";
 import { getPriceChartingPrices } from "@/lib/apis/pricecharting";
+import { searchFacebookMarketplace } from "@/lib/apis/facebook-marketplace";
 import { insertPriceSnapshots } from "@/lib/db/market-prices";
 import { upsertDeal, deactivateStaleDeals } from "@/lib/db/deals";
 
 type TrackedCardRow = Database["public"]["Tables"]["tracked_cards"]["Row"];
 type MarketPriceInsert = Database["public"]["Tables"]["market_prices"]["Insert"];
+
+interface NormalizedListing {
+  itemId: string;
+  title: string;
+  priceCents: number;
+  url: string;
+  imageUrl: string;
+  sellerName: string;
+  condition: string;
+  source: "ebay" | "facebook";
+}
 
 const MIN_DISCOUNT_PCT = 15;
 
@@ -113,23 +125,49 @@ export async function scanCardForDeals(
     result.errors.push(`Price snapshot insert: ${err}`);
   }
 
-  // 4. Fetch active eBay listings
-  let listings;
-  try {
-    listings = await searchEbayListings(
-      card.card_name,
-      card.card_set ?? undefined
-    );
-  } catch (err) {
-    result.errors.push(`eBay Browse: ${err}`);
+  // 4. Fetch active listings from eBay AND Facebook Marketplace in parallel
+  const allListings: NormalizedListing[] = [];
+
+  const [ebayResult, fbResult] = await Promise.allSettled([
+    searchEbayListings(card.card_name, card.card_set ?? undefined),
+    searchFacebookMarketplace(card.card_name, card.card_set ?? undefined),
+  ]);
+
+  if (ebayResult.status === "fulfilled") {
+    for (const l of ebayResult.value) {
+      allListings.push({ ...l, itemId: l.itemId, source: "ebay" });
+    }
+  } else {
+    result.errors.push(`eBay Browse: ${ebayResult.reason}`);
+  }
+
+  if (fbResult.status === "fulfilled") {
+    for (const l of fbResult.value) {
+      allListings.push({
+        itemId: `fb-${l.listingId}`,
+        title: l.title,
+        priceCents: l.priceCents,
+        url: l.url,
+        imageUrl: l.imageUrl,
+        sellerName: `${l.sellerName} (${l.location})`,
+        condition: "Not Specified",
+        source: "facebook",
+      });
+    }
+  } else {
+    result.errors.push(`Facebook Marketplace: ${fbResult.reason}`);
+  }
+
+  if (allListings.length === 0) {
+    result.errors.push("No listings found from any source");
     return result;
   }
 
   // 5. Identify deals and upsert
-  const activeEbayItemIds: string[] = [];
+  const activeItemIds: string[] = [];
 
-  for (const listing of listings) {
-    activeEbayItemIds.push(listing.itemId);
+  for (const listing of allListings) {
+    activeItemIds.push(listing.itemId);
 
     const discountPct = evaluateDeal(
       listing.priceCents,
@@ -143,7 +181,7 @@ export async function scanCardForDeals(
           tracked_card_id: card.id,
           user_id: card.user_id,
           ebay_item_id: listing.itemId,
-          ebay_title: listing.title,
+          ebay_title: `[${listing.source === "facebook" ? "FB" : "eBay"}] ${listing.title}`,
           ebay_price_cents: listing.priceCents,
           ebay_url: listing.url,
           ebay_image_url: listing.imageUrl,
@@ -161,9 +199,9 @@ export async function scanCardForDeals(
   }
 
   // 6. Mark stale deals as inactive
-  if (activeEbayItemIds.length > 0) {
+  if (activeItemIds.length > 0) {
     try {
-      await deactivateStaleDeals(supabase, card.id, activeEbayItemIds);
+      await deactivateStaleDeals(supabase, card.id, activeItemIds);
     } catch (err) {
       result.errors.push(`Stale deal deactivation: ${err}`);
     }

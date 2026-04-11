@@ -150,9 +150,19 @@ export function DealCard({ deal }: DealCardProps) {
 
           <Separator />
 
-          {/* Footer: meta + buy button */}
+          {/* Footer: source badge, meta + buy button */}
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <Badge
+                variant="secondary"
+                className={`text-[10px] px-1.5 py-0 ${
+                  deal.listingSource === "facebook"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                    : ""
+                }`}
+              >
+                {deal.listingSource === "facebook" ? "FB Marketplace" : "eBay"}
+              </Badge>
               <span>{deal.condition}</span>
               <span>&middot;</span>
               <span>{deal.sellerName}</span>
@@ -165,7 +175,7 @@ export function DealCard({ deal }: DealCardProps) {
               rel="noopener noreferrer"
               className={buttonVariants({ size: "sm" })}
             >
-              Buy
+              {deal.listingSource === "facebook" ? "View" : "Buy"}
               <ExternalLink className="ml-1 h-3 w-3" />
             </a>
           </div>

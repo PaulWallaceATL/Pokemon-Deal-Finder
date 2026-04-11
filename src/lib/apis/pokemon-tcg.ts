@@ -1,3 +1,5 @@
+import { scrapeTcgplayerPrice } from "./tcgplayer-scraper";
+
 const USE_MOCK = process.env.USE_MOCK_DATA === "true";
 
 export interface PokemonCard {
@@ -151,6 +153,16 @@ export async function getCardById(id: string): Promise<PokemonCard | null> {
     const marketPrice = priceTypes.find((p) => p.market != null)?.market;
     if (marketPrice != null) {
       tcgplayerPriceCents = Math.round(marketPrice * 100);
+    }
+  }
+
+  // If the Pokemon TCG API didn't have a price, scrape TCGPlayer directly
+  if (tcgplayerPriceCents == null) {
+    try {
+      const scraped = await scrapeTcgplayerPrice(card.name, card.set.name);
+      tcgplayerPriceCents = scraped.marketPriceCents;
+    } catch {
+      // Scraping failed — leave price as null
     }
   }
 

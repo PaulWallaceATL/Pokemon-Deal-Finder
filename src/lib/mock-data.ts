@@ -18,6 +18,7 @@ export interface MockDeal {
   discountPct: number;
   foundAt: string;
   isActive: boolean;
+  listingSource: "ebay" | "facebook";
   prices: {
     tcgplayer: number | null;
     pricechartingRaw: number | null;
@@ -74,6 +75,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 35.1,
     foundAt: "2026-04-10T14:30:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 3799,
       pricechartingRaw: 3900,
@@ -114,6 +116,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 27.6,
     foundAt: "2026-04-10T13:15:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 5700,
       pricechartingRaw: 5900,
@@ -154,6 +157,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 25.0,
     foundAt: "2026-04-10T12:00:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 2350,
       pricechartingRaw: 2450,
@@ -194,6 +198,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 24.5,
     foundAt: "2026-04-10T11:45:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 24000,
       pricechartingRaw: 25000,
@@ -234,6 +239,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 22.0,
     foundAt: "2026-04-10T10:30:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 4000,
       pricechartingRaw: 4200,
@@ -274,6 +280,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 18.5,
     foundAt: "2026-04-10T09:20:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 9000,
       pricechartingRaw: 9400,
@@ -314,6 +321,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 17.9,
     foundAt: "2026-04-10T08:10:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 6500,
       pricechartingRaw: 6900,
@@ -354,6 +362,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 17.6,
     foundAt: "2026-04-10T07:00:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 16500,
       pricechartingRaw: 17500,
@@ -394,6 +403,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 16.7,
     foundAt: "2026-04-10T06:30:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 5800,
       pricechartingRaw: 6200,
@@ -434,6 +444,7 @@ export const mockDeals: MockDeal[] = [
     discountPct: 16.2,
     foundAt: "2026-04-10T05:15:00Z",
     isActive: true,
+    listingSource: "ebay",
     prices: {
       tcgplayer: 10200,
       pricechartingRaw: 10800,
@@ -452,6 +463,88 @@ export const mockDeals: MockDeal[] = [
       { priceCents: 11000, date: "2026-02-21", condition: "NM" },
       { priceCents: 10300, date: "2026-02-08", condition: "NM" },
       { priceCents: 10700, date: "2026-01-23", condition: "NM" },
+    ],
+  },
+  {
+    id: "deal-11",
+    cardName: "Charizard VSTAR",
+    cardSet: "Crown Zenith",
+    cardSeries: "Sword & Shield",
+    cardNumber: "GG70/GG70",
+    rarity: "Ultra Rare",
+    pokemonTcgId: "swsh12pt5gg-70",
+    imageUrl: "https://images.pokemontcg.io/swsh12pt5gg/70_hires.png",
+    ebayItemId: "fb-201",
+    ebayTitle: "[FB] Charizard VSTAR Crown Zenith GG70 selling cheap!!",
+    ebayPriceCents: 1500,
+    ebayUrl: "https://www.facebook.com/marketplace/item/fb-201",
+    ebayImageUrl: "https://images.pokemontcg.io/swsh12pt5gg/70_hires.png",
+    sellerName: "Alex R. (Atlanta, GA)",
+    condition: "Not Specified",
+    blendedMarketPriceCents: 2800,
+    discountPct: 46.4,
+    foundAt: "2026-04-10T15:00:00Z",
+    isActive: true,
+    listingSource: "facebook",
+    prices: {
+      tcgplayer: 2700,
+      pricechartingRaw: 2900,
+      pricechartingGraded: 7000,
+      ebaySoldAvg: 2800,
+    },
+    psaPrices: { psa10: 12000, psa9: 7000, psa8: 4200 },
+    last10Sold: [
+      { priceCents: 2900, date: "2026-04-09", condition: "NM" },
+      { priceCents: 2700, date: "2026-04-07", condition: "NM" },
+      { priceCents: 2800, date: "2026-04-04", condition: "LP" },
+      { priceCents: 3000, date: "2026-04-01", condition: "NM" },
+      { priceCents: 2750, date: "2026-03-28", condition: "NM" },
+      { priceCents: 2850, date: "2026-03-15", condition: "NM" },
+      { priceCents: 2600, date: "2026-03-02", condition: "LP" },
+      { priceCents: 2950, date: "2026-02-18", condition: "NM" },
+      { priceCents: 2700, date: "2026-02-05", condition: "NM" },
+      { priceCents: 2800, date: "2026-01-20", condition: "NM" },
+    ],
+  },
+  {
+    id: "deal-12",
+    cardName: "Pikachu V Alt Art",
+    cardSet: "Lost Origin",
+    cardSeries: "Sword & Shield",
+    cardNumber: "TG14/TG30",
+    rarity: "Trainer Gallery",
+    pokemonTcgId: "swsh11tg-14",
+    imageUrl: "https://images.pokemontcg.io/swsh11tg/TG14_hires.png",
+    ebayItemId: "fb-202",
+    ebayTitle: "[FB] Pikachu V Lost Origin TG14 - moving sale, need gone",
+    ebayPriceCents: 900,
+    ebayUrl: "https://www.facebook.com/marketplace/item/fb-202",
+    ebayImageUrl: "https://images.pokemontcg.io/swsh11tg/TG14_hires.png",
+    sellerName: "Jordan K. (Dallas, TX)",
+    condition: "Not Specified",
+    blendedMarketPriceCents: 1400,
+    discountPct: 35.7,
+    foundAt: "2026-04-10T14:45:00Z",
+    isActive: true,
+    listingSource: "facebook",
+    prices: {
+      tcgplayer: 1350,
+      pricechartingRaw: 1450,
+      pricechartingGraded: 3500,
+      ebaySoldAvg: 1400,
+    },
+    psaPrices: { psa10: 5500, psa9: 3500, psa8: 2000 },
+    last10Sold: [
+      { priceCents: 1400, date: "2026-04-08", condition: "NM" },
+      { priceCents: 1350, date: "2026-04-05", condition: "NM" },
+      { priceCents: 1500, date: "2026-04-02", condition: "NM" },
+      { priceCents: 1300, date: "2026-03-30", condition: "LP" },
+      { priceCents: 1450, date: "2026-03-25", condition: "NM" },
+      { priceCents: 1400, date: "2026-03-12", condition: "NM" },
+      { priceCents: 1250, date: "2026-02-28", condition: "LP" },
+      { priceCents: 1500, date: "2026-02-14", condition: "NM" },
+      { priceCents: 1350, date: "2026-02-01", condition: "NM" },
+      { priceCents: 1400, date: "2026-01-18", condition: "NM" },
     ],
   },
 ];
