@@ -2,6 +2,9 @@ export interface MockDeal {
   id: string;
   cardName: string;
   cardSet: string;
+  cardSeries: string;
+  cardNumber: string;
+  rarity: string;
   pokemonTcgId: string;
   imageUrl: string;
   ebayItemId: string;
@@ -21,6 +24,16 @@ export interface MockDeal {
     pricechartingGraded: number | null;
     ebaySoldAvg: number | null;
   };
+  psaPrices: {
+    psa10: number | null;
+    psa9: number | null;
+    psa8: number | null;
+  } | null;
+  last5Sold: {
+    priceCents: number;
+    date: string;
+    condition: string;
+  }[];
 }
 
 export interface MockListing {
@@ -45,6 +58,9 @@ export const mockDeals: MockDeal[] = [
     id: "deal-1",
     cardName: "Charizard ex",
     cardSet: "Obsidian Flames",
+    cardSeries: "Scarlet & Violet",
+    cardNumber: "125/197",
+    rarity: "Double Rare",
     pokemonTcgId: "sv3-125",
     imageUrl: "https://images.pokemontcg.io/sv3/125_hires.png",
     ebayItemId: "eb-001",
@@ -64,11 +80,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 8500,
       ebaySoldAvg: 3850,
     },
+    psaPrices: { psa10: 15000, psa9: 8500, psa8: 5200 },
+    last5Sold: [
+      { priceCents: 3900, date: "2026-04-09", condition: "NM" },
+      { priceCents: 3750, date: "2026-04-08", condition: "NM" },
+      { priceCents: 4100, date: "2026-04-06", condition: "NM" },
+      { priceCents: 3600, date: "2026-04-04", condition: "LP" },
+      { priceCents: 3900, date: "2026-04-02", condition: "NM" },
+    ],
   },
   {
     id: "deal-2",
     cardName: "Pikachu VMAX",
     cardSet: "Vivid Voltage",
+    cardSeries: "Sword & Shield",
+    cardNumber: "044/185",
+    rarity: "VMAX",
     pokemonTcgId: "swsh4-44",
     imageUrl: "https://images.pokemontcg.io/swsh4/44_hires.png",
     ebayItemId: "eb-002",
@@ -88,11 +115,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 12000,
       ebaySoldAvg: 5800,
     },
+    psaPrices: { psa10: 22000, psa9: 12000, psa8: 7500 },
+    last5Sold: [
+      { priceCents: 5900, date: "2026-04-09", condition: "NM" },
+      { priceCents: 5600, date: "2026-04-07", condition: "LP" },
+      { priceCents: 6100, date: "2026-04-05", condition: "NM" },
+      { priceCents: 5700, date: "2026-04-03", condition: "NM" },
+      { priceCents: 5700, date: "2026-04-01", condition: "LP" },
+    ],
   },
   {
     id: "deal-3",
     cardName: "Mewtwo V Alt Art",
     cardSet: "Pokémon GO",
+    cardSeries: "Sword & Shield",
+    cardNumber: "030/078",
+    rarity: "Ultra Rare",
     pokemonTcgId: "pgo-30",
     imageUrl: "https://images.pokemontcg.io/pgo/30_hires.png",
     ebayItemId: "eb-003",
@@ -112,11 +150,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 5500,
       ebaySoldAvg: 2400,
     },
+    psaPrices: { psa10: 9500, psa9: 5500, psa8: 3200 },
+    last5Sold: [
+      { priceCents: 2500, date: "2026-04-08", condition: "NM" },
+      { priceCents: 2300, date: "2026-04-06", condition: "NM" },
+      { priceCents: 2450, date: "2026-04-04", condition: "NM" },
+      { priceCents: 2200, date: "2026-04-02", condition: "LP" },
+      { priceCents: 2550, date: "2026-03-30", condition: "NM" },
+    ],
   },
   {
     id: "deal-4",
     cardName: "Umbreon VMAX Alt Art",
     cardSet: "Evolving Skies",
+    cardSeries: "Sword & Shield",
+    cardNumber: "215/203",
+    rarity: "Alternate Art Secret",
     pokemonTcgId: "swsh7-215",
     imageUrl: "https://images.pokemontcg.io/swsh7/215_hires.png",
     ebayItemId: "eb-004",
@@ -136,11 +185,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 65000,
       ebaySoldAvg: 24500,
     },
+    psaPrices: { psa10: 85000, psa9: 65000, psa8: 38000 },
+    last5Sold: [
+      { priceCents: 25000, date: "2026-04-09", condition: "NM" },
+      { priceCents: 24200, date: "2026-04-07", condition: "NM" },
+      { priceCents: 23800, date: "2026-04-05", condition: "LP" },
+      { priceCents: 25500, date: "2026-04-03", condition: "NM" },
+      { priceCents: 24000, date: "2026-04-01", condition: "NM" },
+    ],
   },
   {
     id: "deal-5",
     cardName: "Giratina V Alt Art",
     cardSet: "Lost Origin",
+    cardSeries: "Sword & Shield",
+    cardNumber: "186/196",
+    rarity: "Alternate Art Secret",
     pokemonTcgId: "swsh11-186",
     imageUrl: "https://images.pokemontcg.io/swsh11/186_hires.png",
     ebayItemId: "eb-005",
@@ -160,11 +220,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 9800,
       ebaySoldAvg: 4100,
     },
+    psaPrices: { psa10: 16000, psa9: 9800, psa8: 6000 },
+    last5Sold: [
+      { priceCents: 4200, date: "2026-04-08", condition: "NM" },
+      { priceCents: 3900, date: "2026-04-06", condition: "NM" },
+      { priceCents: 4300, date: "2026-04-04", condition: "Mint" },
+      { priceCents: 4000, date: "2026-04-02", condition: "NM" },
+      { priceCents: 4100, date: "2026-03-31", condition: "NM" },
+    ],
   },
   {
     id: "deal-6",
     cardName: "Rayquaza VMAX Alt Art",
     cardSet: "Evolving Skies",
+    cardSeries: "Sword & Shield",
+    cardNumber: "218/203",
+    rarity: "Alternate Art Secret",
     pokemonTcgId: "swsh7-218",
     imageUrl: "https://images.pokemontcg.io/swsh7/218_hires.png",
     ebayItemId: "eb-006",
@@ -184,11 +255,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 22000,
       ebaySoldAvg: 9200,
     },
+    psaPrices: { psa10: 35000, psa9: 22000, psa8: 14000 },
+    last5Sold: [
+      { priceCents: 9400, date: "2026-04-09", condition: "NM" },
+      { priceCents: 9000, date: "2026-04-07", condition: "LP" },
+      { priceCents: 9500, date: "2026-04-05", condition: "NM" },
+      { priceCents: 8800, date: "2026-04-03", condition: "LP" },
+      { priceCents: 9300, date: "2026-04-01", condition: "NM" },
+    ],
   },
   {
     id: "deal-7",
     cardName: "Mew VMAX Alt Art",
     cardSet: "Fusion Strike",
+    cardSeries: "Sword & Shield",
+    cardNumber: "268/264",
+    rarity: "Alternate Art Secret",
     pokemonTcgId: "swsh8-268",
     imageUrl: "https://images.pokemontcg.io/swsh8/268_hires.png",
     ebayItemId: "eb-007",
@@ -208,11 +290,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 15000,
       ebaySoldAvg: 6700,
     },
+    psaPrices: { psa10: 25000, psa9: 15000, psa8: 9000 },
+    last5Sold: [
+      { priceCents: 6800, date: "2026-04-09", condition: "NM" },
+      { priceCents: 6500, date: "2026-04-07", condition: "NM" },
+      { priceCents: 7000, date: "2026-04-05", condition: "NM" },
+      { priceCents: 6600, date: "2026-04-03", condition: "LP" },
+      { priceCents: 6600, date: "2026-04-01", condition: "NM" },
+    ],
   },
   {
     id: "deal-8",
     cardName: "Moonbreon",
     cardSet: "Surging Sparks",
+    cardSeries: "Scarlet & Violet",
+    cardNumber: "185/191",
+    rarity: "Special Art Rare",
     pokemonTcgId: "sv8-185",
     imageUrl: "https://images.pokemontcg.io/sv8/185_hires.png",
     ebayItemId: "eb-008",
@@ -232,11 +325,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 40000,
       ebaySoldAvg: 17000,
     },
+    psaPrices: { psa10: 55000, psa9: 40000, psa8: 22000 },
+    last5Sold: [
+      { priceCents: 17500, date: "2026-04-09", condition: "NM" },
+      { priceCents: 16800, date: "2026-04-07", condition: "NM" },
+      { priceCents: 17200, date: "2026-04-05", condition: "NM" },
+      { priceCents: 16500, date: "2026-04-03", condition: "NM" },
+      { priceCents: 17000, date: "2026-04-01", condition: "LP" },
+    ],
   },
   {
     id: "deal-9",
     cardName: "Lugia V Alt Art",
     cardSet: "Silver Tempest",
+    cardSeries: "Sword & Shield",
+    cardNumber: "186/195",
+    rarity: "Alternate Art Secret",
     pokemonTcgId: "swsh12-186",
     imageUrl: "https://images.pokemontcg.io/swsh12/186_hires.png",
     ebayItemId: "eb-009",
@@ -256,11 +360,22 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 14000,
       ebaySoldAvg: 6000,
     },
+    psaPrices: { psa10: 22000, psa9: 14000, psa8: 8500 },
+    last5Sold: [
+      { priceCents: 6200, date: "2026-04-08", condition: "NM" },
+      { priceCents: 5800, date: "2026-04-06", condition: "LP" },
+      { priceCents: 6100, date: "2026-04-04", condition: "NM" },
+      { priceCents: 5900, date: "2026-04-02", condition: "NM" },
+      { priceCents: 6000, date: "2026-03-31", condition: "LP" },
+    ],
   },
   {
     id: "deal-10",
     cardName: "Gengar VMAX Alt Art",
     cardSet: "Fusion Strike",
+    cardSeries: "Sword & Shield",
+    cardNumber: "271/264",
+    rarity: "Alternate Art Secret",
     pokemonTcgId: "swsh8-271",
     imageUrl: "https://images.pokemontcg.io/swsh8/271_hires.png",
     ebayItemId: "eb-010",
@@ -280,6 +395,14 @@ export const mockDeals: MockDeal[] = [
       pricechartingGraded: 25000,
       ebaySoldAvg: 10500,
     },
+    psaPrices: { psa10: 40000, psa9: 25000, psa8: 15000 },
+    last5Sold: [
+      { priceCents: 10800, date: "2026-04-09", condition: "NM" },
+      { priceCents: 10200, date: "2026-04-07", condition: "NM" },
+      { priceCents: 10600, date: "2026-04-05", condition: "NM" },
+      { priceCents: 10400, date: "2026-04-03", condition: "LP" },
+      { priceCents: 10500, date: "2026-04-01", condition: "NM" },
+    ],
   },
 ];
 
