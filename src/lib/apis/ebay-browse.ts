@@ -1,4 +1,4 @@
-import { getEbayAccessToken } from "./ebay-auth";
+import * as cheerio from "cheerio";
 
 const USE_MOCK = process.env.USE_MOCK_DATA === "true";
 
@@ -11,6 +11,13 @@ export interface EbayListing {
   sellerName: string;
   condition: string;
 }
+
+const SCRAPE_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+};
 
 const mockListings: EbayListing[] = [
   {
@@ -60,6 +67,17 @@ const mockListings: EbayListing[] = [
   },
 ];
 
+function parsePriceCents(text: string | undefined): number | null {
+  if (!text) return null;
+  const cleaned = text.replace(/[^0-9.]/g, "");
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? null : Math.round(parsed * 100);
+}
+
+/**
+ * Scrape eBay search results for active Buy It Now listings.
+ * Uses eBay's public search page — no API key required.
+ */
 export async function searchEbayListings(
   cardName: string,
   cardSet?: string
@@ -71,50 +89,63 @@ export async function searchEbayListings(
     }));
   }
 
-  const token = await getEbayAccessToken();
   const query = cardSet ? `${cardName} ${cardSet}` : cardName;
 
-  const response = await fetch(
-    `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
-      new URLSearchParams({
-        q: query,
-        category_ids: "183454", // Pokemon TCG
-        limit: "10",
-        sort: "price",
-        filter: "buyingOptions:{FIXED_PRICE}",
-      }),
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-      },
-    }
-  );
+  // _nkw = keywords, _sacat = category (183454 = Pokemon TCG),
+  // LH_BIN = Buy It Now, _sop = sort by price + shipping lowest first
+  const searchUrl =
+    `https://www.ebay.com/sch/i.html?` +
+    new URLSearchParams({
+      _nkw: query,
+      _sacat: "183454",
+      LH_BIN: "1",
+      _sop: "15",
+      _ipg: "60",
+    }).toString();
 
+  const response = await fetch(searchUrl, { headers: SCRAPE_HEADERS });
   if (!response.ok) {
-    throw new Error(`eBay Browse API error: ${response.status}`);
+    throw new Error(`eBay search scrape failed: ${response.status}`);
   }
 
-  const data = await response.json();
-  const items = data.itemSummaries ?? [];
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const listings: EbayListing[] = [];
 
-  return items.map(
-    (item: {
-      itemId: string;
-      title: string;
-      price: { value: string };
-      itemWebUrl: string;
-      image?: { imageUrl: string };
-      seller?: { username: string };
-      condition: string;
-    }) => ({
-      itemId: item.itemId,
-      title: item.title,
-      priceCents: Math.round(parseFloat(item.price.value) * 100),
-      url: item.itemWebUrl,
-      imageUrl: item.image?.imageUrl ?? "",
-      sellerName: item.seller?.username ?? "unknown",
-      condition: item.condition ?? "Not Specified",
-    })
-  );
+  $(".s-item").each((_, el) => {
+    if (listings.length >= 15) return false;
+
+    const $item = $(el);
+    const title = $item.find(".s-item__title span, .s-item__title").first().text().trim();
+    if (!title || title === "Shop on eBay") return;
+
+    const priceText = $item.find(".s-item__price").first().text();
+    const priceCents = parsePriceCents(priceText);
+    if (!priceCents || priceCents <= 0) return;
+
+    const link = $item.find("a.s-item__link").attr("href") ?? "";
+    const imageUrl =
+      $item.find(".s-item__image-wrapper img").attr("src") ??
+      $item.find("img").first().attr("src") ??
+      "";
+
+    const conditionText = $item.find(".SECONDARY_INFO").text().trim();
+    const sellerInfo = $item.find(".s-item__seller-info-text, .s-item__seller-info").text().trim();
+
+    // Extract item ID from URL
+    const idMatch = link.match(/\/itm\/(\d+)/);
+    const itemId = idMatch?.[1] ?? `eb-${Date.now()}-${listings.length}`;
+
+    listings.push({
+      itemId,
+      title,
+      priceCents,
+      url: link.split("?")[0],
+      imageUrl,
+      sellerName: sellerInfo || "unknown",
+      condition: conditionText || "Not Specified",
+    });
+  });
+
+  return listings;
 }
