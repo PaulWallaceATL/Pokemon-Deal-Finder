@@ -108,12 +108,15 @@ async function searchViaApi(
   const token = await getEbayOAuthToken();
   if (!token) return [];
 
+  // Exclude digital codes, lots, and accessories from results
+  const refinedQuery = `${query} -code -online -digital -lot -bundle -custom -proxy -repack`;
+
   const params = new URLSearchParams({
-    q: query,
+    q: refinedQuery,
     category_ids: "183454",
-    filter: "buyingOptions:{FIXED_PRICE}",
-    sort: "price",
-    limit: "20",
+    filter: "buyingOptions:{FIXED_PRICE},price:[1..],deliveryCountry:US",
+    sort: "newlyListed",
+    limit: "40",
   });
 
   const response = await fetch(
@@ -135,32 +138,42 @@ async function searchViaApi(
   const data = await response.json();
   const items = data.itemSummaries ?? [];
 
-  return items.slice(0, 20).map(
-    (item: {
-      itemId: string;
-      title: string;
-      price: { value: string; currency: string };
-      itemWebUrl: string;
-      image?: { imageUrl: string };
-      thumbnailImages?: { imageUrl: string }[];
-      seller?: { username: string };
-      condition?: string;
-      conditionId?: string;
-    }): EbayListing => {
-      const priceDollars = parseFloat(item.price?.value ?? "0");
-      const imageUrl = item.image?.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? "";
-      return {
-        itemId: item.itemId,
-        title: item.title,
-        priceCents: Math.round(priceDollars * 100),
-        url: item.itemWebUrl,
-        imageUrl,
-        imageUrls: [imageUrl],
-        sellerName: item.seller?.username ?? "unknown",
-        condition: item.condition ?? "Not Specified",
-      };
-    }
-  );
+  const JUNK_PATTERNS = /\b(code|online code|digital|tcg live|ptcgo|lot of|bulk|custom|proxy|repack|sleeve|binder|toploader|supplies)\b/i;
+
+  return items
+    .filter((item: { title: string; price: { value: string } }) => {
+      if (JUNK_PATTERNS.test(item.title)) return false;
+      const price = parseFloat(item.price?.value ?? "0");
+      if (price < 0.50) return false;
+      return true;
+    })
+    .slice(0, 20)
+    .map(
+      (item: {
+        itemId: string;
+        title: string;
+        price: { value: string; currency: string };
+        itemWebUrl: string;
+        image?: { imageUrl: string };
+        thumbnailImages?: { imageUrl: string }[];
+        seller?: { username: string };
+        condition?: string;
+        conditionId?: string;
+      }): EbayListing => {
+        const priceDollars = parseFloat(item.price?.value ?? "0");
+        const imageUrl = item.image?.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? "";
+        return {
+          itemId: item.itemId,
+          title: item.title,
+          priceCents: Math.round(priceDollars * 100),
+          url: item.itemWebUrl,
+          imageUrl,
+          imageUrls: [imageUrl],
+          sellerName: item.seller?.username ?? "unknown",
+          condition: item.condition ?? "Not Specified",
+        };
+      }
+    );
 }
 
 /**
