@@ -13,6 +13,8 @@ export interface EbayListing {
   condition: string;
 }
 
+const EBAY_APP_ID = process.env.EBAY_APP_ID;
+
 const SCRAPE_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -27,7 +29,7 @@ const mockListings: EbayListing[] = [
     priceCents: 2499,
     url: "https://www.ebay.com/itm/mock-001",
     imageUrl: "https://via.placeholder.com/200x280?text=Card",
-    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front", "https://via.placeholder.com/800x1120?text=Card+Back"],
+    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front"],
     sellerName: "pokecards_seller",
     condition: "Near Mint",
   },
@@ -41,42 +43,8 @@ const mockListings: EbayListing[] = [
     sellerName: "card_central",
     condition: "Lightly Played",
   },
-  {
-    itemId: "mock-eb-003",
-    title: "Pokemon Card Pack Fresh Mint!",
-    priceCents: 3499,
-    url: "https://www.ebay.com/itm/mock-003",
-    imageUrl: "https://via.placeholder.com/200x280?text=Card",
-    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front", "https://via.placeholder.com/800x1120?text=Card+Back"],
-    sellerName: "mint_pokemon",
-    condition: "Mint",
-  },
-  {
-    itemId: "mock-eb-004",
-    title: "Pokemon Card Played Condition",
-    priceCents: 1999,
-    url: "https://www.ebay.com/itm/mock-004",
-    imageUrl: "https://via.placeholder.com/200x280?text=Card",
-    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front"],
-    sellerName: "budget_tcg",
-    condition: "Moderately Played",
-  },
-  {
-    itemId: "mock-eb-005",
-    title: "Pokemon Card NM/M",
-    priceCents: 3700,
-    url: "https://www.ebay.com/itm/mock-005",
-    imageUrl: "https://via.placeholder.com/200x280?text=Card",
-    imageUrls: ["https://via.placeholder.com/800x1120?text=Card+Front", "https://via.placeholder.com/800x1120?text=Card+Back"],
-    sellerName: "top_tier_cards",
-    condition: "Near Mint",
-  },
 ];
 
-/**
- * Convert an eBay thumbnail URL to the highest-resolution version.
- * eBay image URLs follow the pattern: i.ebayimg.com/images/g/.../s-l{size}.jpg
- */
 function toHighRes(url: string): string {
   return url.replace(/s-l\d+(\.\w+)$/, "s-l1600$1");
 }
@@ -89,24 +57,118 @@ function parsePriceCents(text: string | undefined): number | null {
 }
 
 /**
- * Scrape eBay search results for active Buy It Now listings.
- * Uses eBay's public search page — no API key required.
+ * Get an OAuth application token from eBay using client credentials grant.
+ * This uses the App ID (Client ID) and Cert ID (Client Secret).
  */
-export async function searchEbayListings(
-  cardName: string,
-  cardSet?: string
-): Promise<EbayListing[]> {
-  if (USE_MOCK) {
-    return mockListings.map((l) => ({
-      ...l,
-      title: `${cardName} ${cardSet ?? ""} ${l.condition}`.trim(),
-    }));
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+async function getEbayOAuthToken(): Promise<string | null> {
+  const appId = process.env.EBAY_APP_ID;
+  const certId = process.env.EBAY_CERT_ID;
+
+  if (!appId || !certId) return null;
+
+  if (cachedToken && Date.now() < cachedToken.expiresAt) {
+    return cachedToken.token;
   }
 
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const credentials = Buffer.from(`${appId}:${certId}`).toString("base64");
 
-  // _nkw = keywords, _sacat = category (183454 = Pokemon TCG),
-  // LH_BIN = Buy It Now, _sop = sort by price + shipping lowest first
+  const response = await fetch(
+    "https://api.ebay.com/identity/v1/oauth2/token",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+    }
+  );
+
+  if (!response.ok) {
+    console.warn(`eBay OAuth failed: ${response.status}`);
+    return null;
+  }
+
+  const data = await response.json();
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+  };
+  return cachedToken.token;
+}
+
+/**
+ * Search eBay via the official Browse API (works reliably from cloud servers).
+ */
+async function searchViaApi(
+  query: string
+): Promise<EbayListing[]> {
+  const token = await getEbayOAuthToken();
+  if (!token) return [];
+
+  const params = new URLSearchParams({
+    q: query,
+    category_ids: "183454",
+    filter: "buyingOptions:{FIXED_PRICE}",
+    sort: "price",
+    limit: "20",
+  });
+
+  const response = await fetch(
+    `https://api.ebay.com/buy/browse/v1/item_summary/search?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    console.warn(`eBay Browse API failed: ${response.status}`);
+    return [];
+  }
+
+  const data = await response.json();
+  const items = data.itemSummaries ?? [];
+
+  return items.slice(0, 20).map(
+    (item: {
+      itemId: string;
+      title: string;
+      price: { value: string; currency: string };
+      itemWebUrl: string;
+      image?: { imageUrl: string };
+      thumbnailImages?: { imageUrl: string }[];
+      seller?: { username: string };
+      condition?: string;
+      conditionId?: string;
+    }): EbayListing => {
+      const priceDollars = parseFloat(item.price?.value ?? "0");
+      const imageUrl = item.image?.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? "";
+      return {
+        itemId: item.itemId,
+        title: item.title,
+        priceCents: Math.round(priceDollars * 100),
+        url: item.itemWebUrl,
+        imageUrl,
+        imageUrls: [imageUrl],
+        sellerName: item.seller?.username ?? "unknown",
+        condition: item.condition ?? "Not Specified",
+      };
+    }
+  );
+}
+
+/**
+ * Search eBay via HTML scraping (fallback when API keys not configured).
+ */
+async function searchViaScrape(
+  query: string
+): Promise<EbayListing[]> {
   const searchUrl =
     `https://www.ebay.com/sch/i.html?` +
     new URLSearchParams({
@@ -127,7 +189,7 @@ export async function searchEbayListings(
   const listings: EbayListing[] = [];
 
   $(".s-item").each((_, el) => {
-    if (listings.length >= 15) return false;
+    if (listings.length >= 20) return false;
 
     const $item = $(el);
     const title = $item.find(".s-item__title span, .s-item__title").first().text().trim();
@@ -143,10 +205,7 @@ export async function searchEbayListings(
       $item.find("img").first().attr("src") ??
       "";
 
-    // Upgrade thumbnail to high-res: eBay thumbnails use s-l225 or s-l300,
-    // replacing with s-l1600 gets the full-size listing photo
     const hiresUrl = toHighRes(thumbUrl);
-
     const conditionText = $item.find(".SECONDARY_INFO").text().trim();
     const sellerInfo = $item.find(".s-item__seller-info-text, .s-item__seller-info").text().trim();
 
@@ -166,4 +225,36 @@ export async function searchEbayListings(
   });
 
   return listings;
+}
+
+/**
+ * Search eBay for active Buy It Now listings.
+ * Uses the official Browse API when credentials are available,
+ * falls back to HTML scraping otherwise.
+ */
+export async function searchEbayListings(
+  cardName: string,
+  cardSet?: string
+): Promise<EbayListing[]> {
+  if (USE_MOCK) {
+    return mockListings.map((l) => ({
+      ...l,
+      title: `${cardName} ${cardSet ?? ""} ${l.condition}`.trim(),
+    }));
+  }
+
+  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+
+  // Prefer the official API (works from cloud servers)
+  if (EBAY_APP_ID) {
+    try {
+      const results = await searchViaApi(query);
+      if (results.length > 0) return results;
+    } catch (err) {
+      console.warn("eBay API search failed, trying scrape:", err);
+    }
+  }
+
+  // Fallback to scraping (works locally, may fail from cloud IPs)
+  return searchViaScrape(query);
 }

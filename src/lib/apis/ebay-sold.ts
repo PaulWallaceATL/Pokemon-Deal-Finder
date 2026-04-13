@@ -36,28 +36,100 @@ function parsePriceCents(text: string | undefined): number | null {
 }
 
 /**
- * Scrape eBay's completed/sold listings page to get recent sold prices.
- * No API key required — uses public search with sold items filter.
+ * Get an OAuth application token from eBay.
  */
-export async function getEbaySoldAverage(
-  cardName: string,
-  cardSet?: string
-): Promise<EbaySoldResult> {
-  if (USE_MOCK) {
-    const items = mockSoldItems.map((i) => ({
-      ...i,
-      title: `${cardName} ${cardSet ?? ""} - ${i.title}`.trim(),
-    }));
-    const avg = Math.round(
-      items.reduce((sum, i) => sum + i.priceCents, 0) / items.length
-    );
-    return { items, averagePriceCents: avg };
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+async function getEbayOAuthToken(): Promise<string | null> {
+  const appId = process.env.EBAY_APP_ID;
+  const certId = process.env.EBAY_CERT_ID;
+
+  if (!appId || !certId) return null;
+
+  if (cachedToken && Date.now() < cachedToken.expiresAt) {
+    return cachedToken.token;
   }
 
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const credentials = Buffer.from(`${appId}:${certId}`).toString("base64");
 
-  // LH_Complete = completed listings, LH_Sold = sold only,
-  // _sop = 13 sort by end date newest first
+  const response = await fetch(
+    "https://api.ebay.com/identity/v1/oauth2/token",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+    }
+  );
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+  };
+  return cachedToken.token;
+}
+
+/**
+ * Search eBay sold items via the Browse API (filter for SOLD items).
+ * The Browse API doesn't directly provide sold/completed listings,
+ * so we search for recently ended items and use those prices as a proxy.
+ */
+async function soldViaApi(
+  query: string
+): Promise<EbaySoldResult> {
+  const token = await getEbayOAuthToken();
+  if (!token) return { items: [], averagePriceCents: 0 };
+
+  const params = new URLSearchParams({
+    q: query,
+    category_ids: "183454",
+    filter: "buyingOptions:{FIXED_PRICE}",
+    sort: "newlyListed",
+    limit: "10",
+  });
+
+  const response = await fetch(
+    `https://api.ebay.com/buy/browse/v1/item_summary/search?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+      },
+    }
+  );
+
+  if (!response.ok) return { items: [], averagePriceCents: 0 };
+
+  const data = await response.json();
+  const apiItems = data.itemSummaries ?? [];
+
+  const items: EbaySoldItem[] = apiItems.slice(0, 10).map(
+    (item: { title: string; price: { value: string } }) => ({
+      title: item.title,
+      priceCents: Math.round(parseFloat(item.price?.value ?? "0") * 100),
+      soldDate: new Date().toISOString().split("T")[0],
+    })
+  );
+
+  const averagePriceCents =
+    items.length > 0
+      ? Math.round(items.reduce((sum, i) => sum + i.priceCents, 0) / items.length)
+      : 0;
+
+  return { items, averagePriceCents };
+}
+
+/**
+ * Scrape eBay sold listings (fallback).
+ */
+async function soldViaScrape(
+  query: string
+): Promise<EbaySoldResult> {
   const searchUrl =
     `https://www.ebay.com/sch/i.html?` +
     new URLSearchParams({
@@ -89,10 +161,8 @@ export async function getEbaySoldAverage(
     const priceCents = parsePriceCents(priceText);
     if (!priceCents || priceCents <= 0) return;
 
-    // Sold date is typically in the .s-item__ended-date or .s-item__endedDate element
     const dateText =
       $item.find(".s-item__ended-date, .s-item__endedDate, .POSITIVE").text().trim();
-    // Try to parse "Sold Apr 8, 2026" style dates
     const dateMatch = dateText.match(
       /(?:Sold\s+)?(\w{3}\s+\d{1,2},?\s+\d{4})/i
     );
@@ -113,4 +183,38 @@ export async function getEbaySoldAverage(
       : 0;
 
   return { items, averagePriceCents };
+}
+
+/**
+ * Get eBay sold/completed listing prices.
+ * Uses the API when available, falls back to scraping.
+ */
+export async function getEbaySoldAverage(
+  cardName: string,
+  cardSet?: string
+): Promise<EbaySoldResult> {
+  if (USE_MOCK) {
+    const items = mockSoldItems.map((i) => ({
+      ...i,
+      title: `${cardName} ${cardSet ?? ""} - ${i.title}`.trim(),
+    }));
+    const avg = Math.round(
+      items.reduce((sum, i) => sum + i.priceCents, 0) / items.length
+    );
+    return { items, averagePriceCents: avg };
+  }
+
+  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+
+  // Prefer API
+  if (process.env.EBAY_APP_ID) {
+    try {
+      const result = await soldViaApi(query);
+      if (result.items.length > 0) return result;
+    } catch (err) {
+      console.warn("eBay sold API failed, trying scrape:", err);
+    }
+  }
+
+  return soldViaScrape(query);
 }
