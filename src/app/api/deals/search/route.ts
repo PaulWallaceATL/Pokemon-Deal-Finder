@@ -145,13 +145,13 @@ export async function GET(request: Request) {
 
         return {
           id: listing.id,
-          cardName: tcgCard?.name ?? query,
+          cardName: listing.title,
           cardSet: tcgCard?.set ?? set ?? "",
           cardSeries: "",
           cardNumber: tcgCard?.number ?? "",
           rarity: tcgCard?.rarity ?? "",
           pokemonTcgId: tcgCard?.id ?? "",
-          imageUrl: tcgCard?.imageLarge ?? tcgCard?.imageSmall ?? listing.imageUrl,
+          imageUrl: listing.imageUrl || tcgCard?.imageLarge || tcgCard?.imageSmall || "",
           ebayItemId: listing.id,
           ebayTitle: listing.title,
           ebayPriceCents: listing.priceCents,

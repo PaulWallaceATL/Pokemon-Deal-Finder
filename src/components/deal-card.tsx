@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { ExternalLink, TrendingDown, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,13 +34,20 @@ interface DealCardProps {
 }
 
 export function DealCard({ deal }: DealCardProps) {
+  // Live search results have eBay-style IDs (not DB UUIDs), link to eBay directly
+  const isLiveResult = deal.id.startsWith("v1|") || deal.id.startsWith("fb-") || deal.id.startsWith("eb-");
+  const detailHref = isLiveResult ? deal.ebayUrl : `/card/${deal.id}`;
+  const linkTarget = isLiveResult ? "_blank" : undefined;
+  const linkRel = isLiveResult ? "noopener noreferrer" : undefined;
 
   return (
     <Card className="group relative overflow-hidden transition-shadow hover:shadow-lg">
       <CardContent className="flex gap-4 p-4">
         {/* Card image */}
-        <Link
-          href={`/card/${deal.id}`}
+        <a
+          href={detailHref}
+          target={linkTarget}
+          rel={linkRel}
           className="relative h-[180px] w-[130px] shrink-0 overflow-hidden rounded-md"
         >
           <Image
@@ -52,19 +58,21 @@ export function DealCard({ deal }: DealCardProps) {
             sizes="130px"
             unoptimized
           />
-        </Link>
+        </a>
 
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* Header: name, set info, discount badge */}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <Link
-                href={`/card/${deal.id}`}
+              <a
+                href={detailHref}
+                target={linkTarget}
+                rel={linkRel}
                 className="block truncate text-base font-semibold hover:underline"
               >
                 {deal.cardName}
-              </Link>
+              </a>
               <p className="text-sm text-muted-foreground">
                 {deal.cardSet} &middot; {deal.cardNumber}
               </p>
