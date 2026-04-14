@@ -99,8 +99,6 @@ export function listingMarketReferenceCents(params: {
   blendedDefault: number;
   filterGrader: GradingCompany;
   filterGrade: string;
-  /** Collectr+eBay blended anchor (treated as ~PSA9-scale pivot for the ladder). */
-  gradedAnchorCents: number | null;
 }): { referenceCents: number; note: string | null } {
   const {
     listingTitle,
@@ -108,40 +106,32 @@ export function listingMarketReferenceCents(params: {
     blendedDefault,
     filterGrader,
     filterGrade,
-    gradedAnchorCents,
   } = params;
 
   if (category === "raw" || category === "sealed") {
     return { referenceCents: blendedDefault, note: null };
   }
 
+  /**
+   * Instant finder: sold + Collectr are already fetched for the listing’s
+   * slab grade (or search filter grade). Use that blend directly — do not
+   * interpolate from a different grade (e.g. PSA 7 vs PSA 9 ladder).
+   */
   const slab = extractSlabFromTitle(listingTitle);
   const filterG = parseFloat(filterGrade);
   const filterGradeNum = Number.isFinite(filterG) ? filterG : 10;
 
   if (slab) {
-    const ref = gradedReferencePriceCents(
-      slab.company,
-      slab.grade,
-      gradedAnchorCents,
-      blendedDefault
-    );
     return {
-      referenceCents: ref,
-      note: `vs ${slab.company} ${slab.grade} guide`,
+      referenceCents: blendedDefault,
+      note: `vs ${slab.company} ${slab.grade} (eBay sold + Collectr for that grade)`,
     };
   }
 
   if (Number.isFinite(filterGradeNum)) {
-    const ref = gradedReferencePriceCents(
-      filterGrader,
-      filterGradeNum,
-      gradedAnchorCents,
-      blendedDefault
-    );
     return {
-      referenceCents: ref,
-      note: `vs ${filterGrader} ${filterGradeNum} filter (no slab in title)`,
+      referenceCents: blendedDefault,
+      note: `vs ${filterGrader} ${filterGradeNum} (no slab in title; using filter grade)`,
     };
   }
 

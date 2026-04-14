@@ -3,6 +3,14 @@
  * card (incl. GG63 vs 105/159, reverse vs non-reverse) is priced on its own comps.
  */
 
+import type {
+  FinderListingCategory,
+  GradingCompany,
+} from "@/lib/pokemon/finder-query";
+import { extractSlabFromTitle } from "@/lib/listing/slab-reference-price";
+
+const KNOWN_GRADERS = new Set(["PSA", "BGS", "CGC", "SGC", "TAG"]);
+
 export interface ParsedListingComp {
   /**
    * Card line for eBay sold search (name + collector #, no set — set is passed
@@ -97,11 +105,21 @@ export function variantSoldQualifier(parsed: ParsedListingComp): string {
 export function compKeyForListing(
   title: string,
   setName: string | undefined,
-  category: string,
-  grader: string,
-  grade: string
+  category: FinderListingCategory,
+  defaultGrader: GradingCompany,
+  defaultGrade: string
 ): string {
   const p = parseListingCompFromTitle(title, setName);
+  let grader = defaultGrader;
+  let grade = defaultGrade;
+  if (category === "graded") {
+    const slab = extractSlabFromTitle(title);
+    if (slab) {
+      const c = slab.company.toUpperCase();
+      if (KNOWN_GRADERS.has(c)) grader = c as GradingCompany;
+      grade = String(slab.grade);
+    }
+  }
   return [
     p.ebayCardQuery.toLowerCase(),
     p.catalogNumber?.toLowerCase() ?? "",

@@ -36,6 +36,8 @@ export interface Deal {
     ebaySoldAvg: number | null;
     /** Instant finder: Collectr bridge (see collectr.com). */
     collectr?: number | null;
+    /** Raw finder only: Collectr PSA 10 reference (display; not used for deal %). */
+    collectrGradedPsa10?: number | null;
   };
   psaPrices: {
     psa10: number | null;

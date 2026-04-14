@@ -8,7 +8,14 @@ import { calculateCollectrEbayBlend } from "@/lib/engine/finder-price-blend";
 import { titleLooksJapaneseImport } from "@/lib/listing/english-comps";
 import { listingAtOrBelowReference } from "@/lib/engine/price-aggregator";
 import type { Deal } from "@/lib/deals/types";
-import { listingMarketReferenceCents } from "@/lib/listing/slab-reference-price";
+import {
+  extractSlabFromTitle,
+  listingMarketReferenceCents,
+} from "@/lib/listing/slab-reference-price";
+import {
+  soldTitleMatchesGradeRough,
+  titleLooksLikeGradedOrSlab,
+} from "@/lib/listing/raw-comps";
 import { POKEMON_SETS } from "@/lib/pokemon-sets";
 import {
   finishSearchSuffix,
@@ -66,7 +73,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Each row uses Collectr (when COLLECTR_MARKET_API_URL is set) and eBay last-five English sold comps keyed off that listing’s title (collector number, reverse vs non-reverse, Radiant, etc.). The summary row shows medians across the current result set, not one price for every card. Japanese import titles are filtered out. See .env.local.example for a Collectr bridge.";
+  "Raw mode uses ungraded sold comps (titles with PSA/BGS/slab are dropped) and Collectr ungraded when your bridge honors explicitlyUngraded. Graded mode matches the slab grade in each title for sold + Collectr (PSA 7 is not priced vs PSA 9). Japanese import titles are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -84,20 +91,77 @@ type CompBundle = {
   collectr: number | null;
   blendedPriceCents: number;
   sampleSize: number;
+  /** Raw finder: PSA 10 Collectr hint for display only (not in blend). */
+  collectrGradedPsa10: number | null;
 };
+
+function buildEffectiveListingQualifier(params: {
+  category: FinderListingCategory;
+  listingTitle: string;
+  defaultGrader: GradingCompany;
+  defaultGrade: string;
+  sealedKind: SealedProductKind;
+  finishSuffix: string;
+}): string {
+  const {
+    category,
+    listingTitle,
+    defaultGrader,
+    defaultGrade,
+    sealedKind,
+    finishSuffix,
+  } = params;
+
+  if (category === "graded") {
+    const slab = extractSlabFromTitle(listingTitle);
+    let grader = defaultGrader;
+    let grade = defaultGrade;
+    if (slab) {
+      const c = slab.company.toUpperCase();
+      if (["PSA", "BGS", "CGC", "SGC", "TAG"].includes(c)) {
+        grader = c as GradingCompany;
+      }
+      grade = String(slab.grade);
+    }
+    const base = buildListingQualifier({
+      category: "graded",
+      grader,
+      grade,
+    });
+    return [base, finishSuffix].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  }
+  if (category === "raw") {
+    const base = buildListingQualifier({ category: "raw" });
+    return [base, finishSuffix].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  }
+  const base = buildListingQualifier({
+    category: "sealed",
+    sealedKind,
+  });
+  return [base, finishSuffix].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
 
 async function fetchListingCompBundle(args: {
   listingTitle: string;
   setName: string | undefined;
   category: FinderListingCategory;
-  grader: GradingCompany;
-  grade: string;
-  listingQualifier: string;
-  englishComp: (title: string) => boolean;
+  defaultGrader: GradingCompany;
+  defaultGrade: string;
+  sealedKind: SealedProductKind;
+  finishSuffix: string;
+  soldTitleFilter: (title: string) => boolean;
 }): Promise<CompBundle> {
   const isSealed = args.category === "sealed";
   const parsed = parseListingCompFromTitle(args.listingTitle, args.setName);
-  const combinedQualifier = [args.listingQualifier, variantSoldQualifier(parsed)]
+  const effQualifier = buildEffectiveListingQualifier({
+    category: args.category,
+    listingTitle: args.listingTitle,
+    defaultGrader: args.defaultGrader,
+    defaultGrade: args.defaultGrade,
+    sealedKind: args.sealedKind,
+    finishSuffix: args.finishSuffix,
+  });
+  const combinedQualifier = [effQualifier, variantSoldQualifier(parsed)]
     .filter(Boolean)
     .join(" ")
     .replace(/\s+/g, " ")
@@ -110,40 +174,80 @@ async function fetchListingCompBundle(args: {
     ? args.listingTitle.slice(0, 160)
     : parsed.collectrCardName || cardLine;
 
-  const [soldRes, collectrCent] = await Promise.all([
+  const variantHints =
+    [
+      parsed.isRadiant ? "radiant" : "",
+      parsed.isReverseHolo ? "reverse holo" : "",
+    ]
+      .filter(Boolean)
+      .join(", ") || undefined;
+
+  let collectrGrader: GradingCompany | undefined;
+  let collectrGradeStr: string | undefined;
+  if (args.category === "graded") {
+    const slab = extractSlabFromTitle(args.listingTitle);
+    if (slab) {
+      const c = slab.company.toUpperCase();
+      if (["PSA", "BGS", "CGC", "SGC", "TAG"].includes(c)) {
+        collectrGrader = c as GradingCompany;
+        collectrGradeStr = String(slab.grade);
+      }
+    }
+    if (!collectrGrader) {
+      collectrGrader = args.defaultGrader;
+      collectrGradeStr = args.defaultGrade;
+    }
+  }
+
+  const gradedSoldTitleFilter =
+    args.category === "graded" && collectrGrader && collectrGradeStr
+      ? (t: string) =>
+          args.soldTitleFilter(t) &&
+          soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr)
+      : args.soldTitleFilter;
+
+  const [soldRes, collectrMain, collectrPsa10Side] = await Promise.all([
     getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
-      titleFilter: args.englishComp,
+      titleFilter: gradedSoldTitleFilter,
     }),
     getCollectrMarketPriceCents({
       cardName: collectrName,
       setName: args.setName,
       category: args.category,
-      grader: args.category === "graded" ? args.grader : undefined,
-      grade: args.category === "graded" ? args.grade : undefined,
+      grader: collectrGrader,
+      grade: collectrGradeStr,
       cardNumber: isSealed ? undefined : parsed.catalogNumber,
       listingTitle: args.listingTitle,
-      variantHints:
-        [
-          parsed.isRadiant ? "radiant" : "",
-          parsed.isReverseHolo ? "reverse holo" : "",
-        ]
-          .filter(Boolean)
-          .join(", ") || undefined,
+      variantHints,
+      explicitlyUngraded: args.category === "raw" ? true : undefined,
     }),
+    args.category === "raw"
+      ? getCollectrMarketPriceCents({
+          cardName: collectrName,
+          setName: args.setName,
+          category: "graded",
+          grader: "PSA",
+          grade: "10",
+          cardNumber: isSealed ? undefined : parsed.catalogNumber,
+          listingTitle: args.listingTitle,
+          variantHints,
+        })
+      : Promise.resolve(null),
   ]);
 
   const ebayAvg =
     soldRes.averagePriceCents > 0 ? soldRes.averagePriceCents : null;
   const blend = calculateCollectrEbayBlend({
-    collectr: collectrCent,
+    collectr: collectrMain,
     ebay_sold_avg: ebayAvg,
   });
 
   return {
     ebaySoldAvg: ebayAvg,
-    collectr: collectrCent,
+    collectr: collectrMain,
     blendedPriceCents: blend.blendedPriceCents,
     sampleSize: soldRes.items.length,
+    collectrGradedPsa10: collectrPsa10Side,
   };
 }
 
@@ -214,6 +318,9 @@ export async function GET(request: Request) {
       setId && setId !== "all" ? { setId } : undefined;
 
     const englishComp = (title: string) => !titleLooksJapaneseImport(title);
+    const soldTitleFilter = (t: string) =>
+      englishComp(t) &&
+      (category !== "raw" || !titleLooksLikeGradedOrSlab(t));
 
     const [ebayResult, fbResult, tcgResult] = await Promise.allSettled([
       searchEbayListings(query, setNameForMarket, listingQualifier, {
@@ -316,10 +423,11 @@ export async function GET(request: Request) {
       listingTitle: query,
       setName: setNameForMarket,
       category,
-      grader,
-      grade,
-      listingQualifier,
-      englishComp,
+      defaultGrader: grader,
+      defaultGrade: grade,
+      sealedKind,
+      finishSuffix,
+      soldTitleFilter,
     });
 
     const freq = new Map<string, number>();
@@ -350,10 +458,11 @@ export async function GET(request: Request) {
           listingTitle: title,
           setName: setNameForMarket,
           category,
-          grader,
-          grade,
-          listingQualifier,
-          englishComp,
+          defaultGrader: grader,
+          defaultGrade: grade,
+          sealedKind,
+          finishSuffix,
+          soldTitleFilter,
         });
         return { k, b };
       }
@@ -419,7 +528,6 @@ export async function GET(request: Request) {
           blendedDefault: bundle.blendedPriceCents,
           filterGrader: grader,
           filterGrade: grade,
-          gradedAnchorCents: bundle.blendedPriceCents,
         });
 
         if (bundle.blendedPriceCents <= 0) return null;
@@ -464,6 +572,8 @@ export async function GET(request: Request) {
             pricechartingGraded: null,
             ebaySoldAvg: bundle.ebaySoldAvg,
             collectr: bundle.collectr,
+            collectrGradedPsa10:
+              category === "raw" ? bundle.collectrGradedPsa10 : null,
           },
           psaPrices: null,
           predictedGrade: null,

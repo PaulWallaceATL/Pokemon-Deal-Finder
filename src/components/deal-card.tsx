@@ -45,6 +45,9 @@ export function DealCard({ deal }: DealCardProps) {
     deal.prices.pricechartingRaw == null &&
     deal.prices.pricechartingGraded == null;
 
+  const isRawFinderRow =
+    finderCollectrEbayPriceRow && deal.productType === "raw";
+
   const showPriceBreakdown =
     deal.prices.tcgplayer != null ||
     deal.prices.pricechartingRaw != null ||
@@ -118,7 +121,18 @@ export function DealCard({ deal }: DealCardProps) {
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
-              {deal.ebayPriceCents <= deal.blendedMarketPriceCents ? (
+              {isRawFinderRow ? (
+                deal.blendedMarketPriceCents > 0 &&
+                deal.ebayPriceCents <= deal.blendedMarketPriceCents ? (
+                  <Badge variant="secondary" className="text-xs">
+                    Below raw market
+                  </Badge>
+                ) : deal.blendedMarketPriceCents > 0 ? (
+                  <Badge variant="secondary" className="text-xs">
+                    Above raw guide
+                  </Badge>
+                ) : null
+              ) : deal.ebayPriceCents <= deal.blendedMarketPriceCents ? (
                 <Badge
                   variant="default"
                   className="bg-green-600 text-white hover:bg-green-700"
@@ -140,40 +154,79 @@ export function DealCard({ deal }: DealCardProps) {
           </div>
 
           {/* Pricing row */}
-          <div className="flex items-baseline gap-3">
-            <span className="text-lg font-bold">
-              {formatCents(deal.ebayPriceCents)}
-            </span>
-            <span className="text-sm text-muted-foreground line-through">
-              {formatCents(deal.blendedMarketPriceCents)}
-            </span>
-            {deal.ebayPriceCents < deal.blendedMarketPriceCents ? (
-              <span className="text-xs font-medium text-green-600">
-                Save{" "}
-                {formatCents(deal.blendedMarketPriceCents - deal.ebayPriceCents)}
+          {isRawFinderRow ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-lg font-bold">
+                {formatCents(deal.ebayPriceCents)}
               </span>
-            ) : deal.ebayPriceCents === deal.blendedMarketPriceCents ? (
-              <span className="text-xs text-muted-foreground">At guide</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {formatCents(deal.ebayPriceCents - deal.blendedMarketPriceCents)}{" "}
-                over guide
+              {deal.blendedMarketPriceCents > 0 ? (
+                <span className="text-sm text-muted-foreground">
+                  Raw market guide {formatCents(deal.blendedMarketPriceCents)}
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-3">
+              <span className="text-lg font-bold">
+                {formatCents(deal.ebayPriceCents)}
               </span>
-            )}
-          </div>
+              <span className="text-sm text-muted-foreground line-through">
+                {formatCents(deal.blendedMarketPriceCents)}
+              </span>
+              {deal.ebayPriceCents < deal.blendedMarketPriceCents ? (
+                <span className="text-xs font-medium text-green-600">
+                  Save{" "}
+                  {formatCents(
+                    deal.blendedMarketPriceCents - deal.ebayPriceCents
+                  )}
+                </span>
+              ) : deal.ebayPriceCents === deal.blendedMarketPriceCents ? (
+                <span className="text-xs text-muted-foreground">At guide</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {formatCents(
+                    deal.ebayPriceCents - deal.blendedMarketPriceCents
+                  )}{" "}
+                  over guide
+                </span>
+              )}
+            </div>
+          )}
 
           {showPriceBreakdown ? (
             <div className="rounded-md border bg-muted/40 px-3 py-2">
               {finderCollectrEbayPriceRow ? (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div
+                  className={`grid gap-x-4 gap-y-1 text-xs ${
+                    deal.prices.collectrGradedPsa10 != null &&
+                    deal.prices.collectrGradedPsa10 > 0
+                      ? "grid-cols-2 sm:grid-cols-3"
+                      : "grid-cols-2"
+                  }`}
+                >
                   <PriceItem
-                    label="Collectr (collectr.com)"
+                    label={
+                      isRawFinderRow
+                        ? "Collectr (raw)"
+                        : "Collectr (collectr.com)"
+                    }
                     value={deal.prices.collectr ?? null}
                   />
                   <PriceItem
-                    label="eBay last 5 sold"
+                    label={
+                      isRawFinderRow
+                        ? "eBay last 5 sold (raw)"
+                        : "eBay last 5 sold"
+                    }
                     value={deal.prices.ebaySoldAvg}
                   />
+                  {deal.prices.collectrGradedPsa10 != null &&
+                  deal.prices.collectrGradedPsa10 > 0 ? (
+                    <PriceItem
+                      label="Collectr PSA 10 (reference)"
+                      value={deal.prices.collectrGradedPsa10}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">

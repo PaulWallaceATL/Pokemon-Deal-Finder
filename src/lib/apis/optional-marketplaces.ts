@@ -45,6 +45,11 @@ export async function getCollectrMarketPriceCents(context: {
   listingTitle?: string;
   /** e.g. "radiant, reverse holo" */
   variantHints?: string;
+  /**
+   * When category is `raw`, set true so the bridge returns **ungraded** market
+   * price (not PSA 10).
+   */
+  explicitlyUngraded?: boolean;
 }): Promise<number | null> {
   const url = process.env.COLLECTR_MARKET_API_URL;
   const key = process.env.COLLECTR_MARKET_API_KEY;
