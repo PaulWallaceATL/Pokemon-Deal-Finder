@@ -73,7 +73,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Raw mode uses ungraded sold comps (titles with PSA/BGS/slab are dropped) and Collectr ungraded when your bridge honors explicitlyUngraded. Graded mode matches the slab grade in each title for sold + Collectr (PSA 7 is not priced vs PSA 9). Japanese import titles are filtered out.";
+  "Raw mode uses completed sold eBay pages only (no Browse API fallback) plus title filters to drop slab wording. Set COLLECTR_MARKET_API_URL so Collectr can anchor ungraded price (explicitlyUngraded in the POST body); without it, the guide is eBay-only and may be thin if sold scrape returns few rows. Graded mode matches slab grade in each title. Japanese imports are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -209,6 +209,8 @@ async function fetchListingCompBundle(args: {
   const [soldRes, collectrMain, collectrPsa10Side] = await Promise.all([
     getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
       titleFilter: gradedSoldTitleFilter,
+      /** Raw: never use Browse API for “sold” — it mixes active slab BINs. */
+      scrapeOnly: args.category === "raw",
     }),
     getCollectrMarketPriceCents({
       cardName: collectrName,

@@ -18,6 +18,13 @@ export interface EbaySoldResult {
 export interface EbaySoldOptions {
   /** Drop comps whose titles fail this check (e.g. English-only). */
   titleFilter?: (title: string) => boolean;
+  /**
+   * Raw finder: use **only** completed sold HTML (`LH_Sold=1`). Never call the
+   * Browse `item_summary` API — it is not sold history and routinely returns
+   * active slab BINs that look like “comps.” If scrape yields nothing, return
+   * an empty result instead of a misleading average.
+   */
+  scrapeOnly?: boolean;
 }
 
 const SOLD_SAMPLE_SIZE = 5;
@@ -230,6 +237,15 @@ export async function getEbaySoldAverage(
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
+
+  if (options?.scrapeOnly) {
+    try {
+      return await soldViaScrape(query, options);
+    } catch (err) {
+      console.warn("eBay sold scrape-only (raw) failed:", err);
+      return { items: [], averagePriceCents: 0 };
+    }
+  }
 
   /**
    * Completed sales: the sold HTML search (LH_Sold=1) is the reliable source.
