@@ -30,6 +30,25 @@ export const NON_HOLO_TITLE_RE = /\bnon[-\s]?holo(?:foil)?\b/i;
 export const REGULAR_HOLO_TITLE_RE =
   /\bregular\s+holo(?:foil)?\b|\bholofoil\b|\bholo\s+rare\b/i;
 
+/**
+ * Sold listing reads as **regular holo / holofoil**, not reverse and not
+ * explicit non-holo. Used so holo comps never include reverse-holo sales.
+ */
+export function soldTitleLooksLikeRegularHolo(soldTitle: string): boolean {
+  const t = soldTitle.normalize("NFKC");
+  if (REVERSE_HOLO_TITLE_RE.test(t)) return false;
+  if (NON_HOLO_TITLE_RE.test(t)) return false;
+  return (
+    REGULAR_HOLO_TITLE_RE.test(t) ||
+    /\bholo(?:foil)?\b/i.test(t)
+  );
+}
+
+/** Sold listing reads as reverse holo / reverse holofoil. */
+export function soldTitleLooksLikeReverseHolo(soldTitle: string): boolean {
+  return REVERSE_HOLO_TITLE_RE.test(soldTitle.normalize("NFKC"));
+}
+
 /** Short label for badges (instant finder + deal rows). */
 export function listingPrintKindDisplayLabel(kind: ListingPrintKind): string {
   switch (kind) {
@@ -67,8 +86,9 @@ export function slabTailAfterGrade(title: string): string {
 }
 
 /**
- * For graded sold comps: when the listing print is explicit, drop sold rows
- * that clearly disagree (e.g. reverse slab priced vs regular-holo sales).
+ * For sold comps: when the listing print is explicit, keep pools disjoint —
+ * reverse holo only vs reverse sold rows; holo only vs rows that clearly read
+ * as regular holo (never reverse holo, never “no holo” titles alone).
  */
 export function soldTitleCompatibleWithListingPrintKind(
   listingPrintKind: ListingPrintKind,
@@ -76,12 +96,12 @@ export function soldTitleCompatibleWithListingPrintKind(
 ): boolean {
   if (listingPrintKind === "unknown") return true;
   const t = soldTitle.normalize("NFKC");
-  const soldReverse = REVERSE_HOLO_TITLE_RE.test(t);
+  const soldReverse = soldTitleLooksLikeReverseHolo(soldTitle);
   if (listingPrintKind === "reverse_holo") {
     return soldReverse;
   }
   if (listingPrintKind === "holo") {
-    return !soldReverse;
+    return soldTitleLooksLikeRegularHolo(soldTitle);
   }
   if (listingPrintKind === "non_holo") {
     return (
