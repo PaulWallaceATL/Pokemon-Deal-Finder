@@ -44,11 +44,17 @@ function bearer(): string | null {
  * Use text before slab keywords for the card name, but keep PSA label print
  * words from the **full** title (e.g. “Reverse Holofoil” after `PSA 10`).
  */
-function listingTitleForTcgSearch(title: string): string {
+function listingTitleForTcgSearch(
+  title: string,
+  forcedPrintKind?: ListingPrintKind
+): string {
   const t = title.normalize("NFKC").trim();
   const idx = t.search(/\b(PSA|BGS|CGC|SGC|TAG)\b/i);
   const head = idx > 0 ? t.slice(0, idx) : t;
-  const pk = inferListingPrintKind(t);
+  const pk =
+    forcedPrintKind != null && forcedPrintKind !== "unknown"
+      ? forcedPrintKind
+      : inferListingPrintKind(t);
   const hint =
     pk === "reverse_holo"
       ? "Reverse Holofoil"
@@ -276,15 +282,18 @@ function variantLabelMatchesPrintKind(
 function pickPrimaryPriceCents(
   variants: TcgCollectorVariantRow[],
   category: FinderListingCategory,
-  listingTitle?: string
+  listingTitle?: string,
+  effectivePrintKind?: ListingPrintKind
 ): number | null {
   const priced = variants.filter((r) => r.priceCents && r.priceCents > 0);
   if (priced.length === 0) return null;
 
-  const kind =
-    listingTitle && listingTitle.trim()
-      ? inferListingPrintKind(listingTitle)
-      : "unknown";
+  const kind: ListingPrintKind =
+    effectivePrintKind != null && effectivePrintKind !== "unknown"
+      ? effectivePrintKind
+      : listingTitle && listingTitle.trim()
+        ? inferListingPrintKind(listingTitle)
+        : "unknown";
 
   const narrow = (pool: TcgCollectorVariantRow[]): TcgCollectorVariantRow[] => {
     if (kind === "unknown" || pool.length === 0) return pool;
@@ -350,14 +359,24 @@ export async function getTcgCollectorListingMatch(opts: {
    * after slab trim so we only hit TCG Collector for cards we already surfaced.
    */
   ebayListingTitle?: string;
+  /** From slab photo vision — overrides title for variant search + pricing. */
+  printKindOverride?: ListingPrintKind | null;
   setName?: string;
   catalogNumber?: string;
   category: FinderListingCategory;
 }): Promise<TcgCollectorListingMatch | null> {
   if (!bearer()) return null;
 
-  const fromListing = opts.ebayListingTitle
-    ? listingTitleForTcgSearch(opts.ebayListingTitle)
+  const listingText = (opts.ebayListingTitle ?? "").trim();
+  const resolvedPrint: ListingPrintKind =
+    opts.printKindOverride != null && opts.printKindOverride !== "unknown"
+      ? opts.printKindOverride
+      : listingText
+        ? inferListingPrintKind(listingText)
+        : "unknown";
+
+  const fromListing = listingText
+    ? listingTitleForTcgSearch(opts.ebayListingTitle!, resolvedPrint)
     : "";
   const parts = fromListing
     ? [fromListing]
@@ -403,7 +422,8 @@ export async function getTcgCollectorListingMatch(opts: {
   const primaryPriceCents = pickPrimaryPriceCents(
     variants,
     opts.category,
-    opts.ebayListingTitle
+    opts.ebayListingTitle,
+    resolvedPrint
   );
 
   return {

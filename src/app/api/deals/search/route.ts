@@ -37,9 +37,11 @@ import {
   parseListingCompFromTitle,
   soldTitleCompatibleWithListingPrintKind,
   variantSoldQualifier,
+  type ListingPrintKind,
 } from "@/lib/listing/listing-comp-query";
+import { attachSlabPrintKindByListingId } from "@/lib/listing/slab-print-vision";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const GRADERS: GradingCompany[] = ["PSA", "BGS", "CGC", "SGC", "TAG"];
 
@@ -76,7 +78,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Raw mode prefers completed sold eBay HTML; on Vercel, when that returns no rows, the app may use eBay Browse listings as a degraded comp (unless EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false). Optional: COLLECTR_MARKET_API_URL (bridge). Catalog price uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; otherwise Pokémon TCG API (api.pokemontcg.io) plus your search context (optional POKEMON_TCG_API_KEY). Graded mode matches slab grade in each title. Japanese imports are filtered out.";
+  "Raw mode prefers completed sold eBay HTML; on Vercel, when that returns no rows, the app may use eBay Browse listings as a degraded comp (unless EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false). Optional: COLLECTR_MARKET_API_URL (bridge). Catalog price uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; otherwise Pokémon TCG API (api.pokemontcg.io) plus your search context (optional POKEMON_TCG_API_KEY). Graded mode matches slab grade in each title. When OPENAI_API_KEY is set, slab listing photos are classified for print type (common vs holo vs reverse); set SLAB_PRINT_VISION=false to disable. Japanese imports are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -165,6 +167,8 @@ async function fetchListingCompBundle(args: {
   sealedKind: SealedProductKind;
   finishSuffix: string;
   soldTitleFilter: (title: string) => boolean;
+  /** Slab photo vision — when set, overrides title-derived print for comps + catalog. */
+  printKindOverride?: ListingPrintKind | null;
   /** User’s search bar text — loosens Pokémon TCG API lookup vs title-only parse. */
   userSearchQuery?: string;
   /** First hit from `searchCards(q)` — anchors catalog pricing to the query, not exact listing title. */
@@ -172,6 +176,15 @@ async function fetchListingCompBundle(args: {
 }): Promise<CompBundle> {
   const isSealed = args.category === "sealed";
   const parsed = parseListingCompFromTitle(args.listingTitle, args.setName);
+  const printKind: ListingPrintKind =
+    args.printKindOverride != null && args.printKindOverride !== "unknown"
+      ? args.printKindOverride
+      : parsed.printKind;
+  const compParsed = {
+    ...parsed,
+    printKind,
+    isReverseHolo: printKind === "reverse_holo",
+  };
   const effQualifier = buildEffectiveListingQualifier({
     category: args.category,
     listingTitle: args.listingTitle,
@@ -180,7 +193,7 @@ async function fetchListingCompBundle(args: {
     sealedKind: args.sealedKind,
     finishSuffix: args.finishSuffix,
   });
-  const combinedQualifier = [effQualifier, variantSoldQualifier(parsed)]
+  const combinedQualifier = [effQualifier, variantSoldQualifier(compParsed)]
     .filter(Boolean)
     .join(" ")
     .replace(/\s+/g, " ")
@@ -195,10 +208,10 @@ async function fetchListingCompBundle(args: {
 
   const variantHints =
     [
-      parsed.isRadiant ? "radiant" : "",
-      parsed.printKind === "reverse_holo" ? "reverse holofoil" : "",
-      parsed.printKind === "holo" ? "holofoil" : "",
-      parsed.printKind === "non_holo" ? "non holo" : "",
+      compParsed.isRadiant ? "radiant" : "",
+      compParsed.printKind === "reverse_holo" ? "reverse holofoil" : "",
+      compParsed.printKind === "holo" ? "holofoil" : "",
+      compParsed.printKind === "non_holo" ? "non holo" : "",
     ]
       .filter(Boolean)
       .join(", ") || undefined;
@@ -220,13 +233,23 @@ async function fetchListingCompBundle(args: {
     }
   }
 
-  const gradedSoldTitleFilter =
+  const gradeRoughOk =
     args.category === "graded" && collectrGrader && collectrGradeStr
       ? (t: string) =>
-          args.soldTitleFilter(t) &&
-          soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr) &&
-          soldTitleCompatibleWithListingPrintKind(parsed.printKind, t)
-      : args.soldTitleFilter;
+          soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr)
+      : () => true;
+
+  const soldTitleFilterFinal = (t: string) => {
+    if (!args.soldTitleFilter(t)) return false;
+    if (!gradeRoughOk(t)) return false;
+    if (
+      compParsed.printKind !== "unknown" &&
+      !soldTitleCompatibleWithListingPrintKind(compParsed.printKind, t)
+    ) {
+      return false;
+    }
+    return true;
+  };
 
   const usePokemonCatalog =
     !isSealed && args.category === "raw";
@@ -234,7 +257,7 @@ async function fetchListingCompBundle(args: {
   const [soldRes, collectrMain, collectrPsa10Side, tcgMatch, pokemonTcgplayerMarket] =
     await Promise.all([
       getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
-        titleFilter: gradedSoldTitleFilter,
+        titleFilter: soldTitleFilterFinal,
         /** Raw: never use Browse API for “sold” — it mixes active slab BINs. */
         scrapeOnly: args.category === "raw",
       }),
@@ -264,6 +287,7 @@ async function fetchListingCompBundle(args: {
       getTcgCollectorListingMatch({
         cardName: collectrName,
         ebayListingTitle: args.listingTitle,
+        printKindOverride: args.printKindOverride,
         setName: args.setName,
         catalogNumber: isSealed ? undefined : parsed.catalogNumber,
         category: args.category,
@@ -494,8 +518,16 @@ export async function GET(request: Request) {
       });
     }
 
-    const genericListingTitle =
-      listingsFiltered[0]?.title?.trim() || query;
+    const printByListingId = await attachSlabPrintKindByListingId({
+      listings: listingsFiltered,
+      category,
+    });
+
+    const genericListing = listingsFiltered[0];
+    const genericListingTitle = genericListing?.title?.trim() || query;
+    const genericVision = genericListing
+      ? printByListingId.get(genericListing.id) ?? null
+      : null;
 
     const genericBundle = await fetchListingCompBundle({
       listingTitle: genericListingTitle,
@@ -506,22 +538,33 @@ export async function GET(request: Request) {
       sealedKind,
       finishSuffix,
       soldTitleFilter,
+      printKindOverride: genericVision,
       userSearchQuery: query,
       tcgAnchorCard: tcgCard,
     });
 
     const freq = new Map<string, number>();
-    const keyToExampleTitle = new Map<string, string>();
+    const keyToMeta = new Map<
+      string,
+      { title: string; printKindOverride: ListingPrintKind | null }
+    >();
     for (const l of listingsFiltered) {
+      const visionKind = printByListingId.get(l.id) ?? null;
       const k = compKeyForListing(
         l.title,
         setNameForMarket,
         category,
         grader,
-        grade
+        grade,
+        visionKind
       );
       freq.set(k, (freq.get(k) ?? 0) + 1);
-      if (!keyToExampleTitle.has(k)) keyToExampleTitle.set(k, l.title);
+      if (!keyToMeta.has(k)) {
+        keyToMeta.set(k, {
+          title: l.title,
+          printKindOverride: visionKind,
+        });
+      }
     }
 
     const sortedKeys = [...freq.entries()]
@@ -533,9 +576,9 @@ export async function GET(request: Request) {
       keysToFetch,
       COMP_FETCH_CONCURRENCY,
       async (k) => {
-        const title = keyToExampleTitle.get(k)!;
+        const meta = keyToMeta.get(k)!;
         const b = await fetchListingCompBundle({
-          listingTitle: title,
+          listingTitle: meta.title,
           setName: setNameForMarket,
           category,
           defaultGrader: grader,
@@ -543,6 +586,7 @@ export async function GET(request: Request) {
           sealedKind,
           finishSuffix,
           soldTitleFilter,
+          printKindOverride: meta.printKindOverride,
           userSearchQuery: query,
           tcgAnchorCard: tcgCard,
         });
@@ -553,20 +597,23 @@ export async function GET(request: Request) {
     const bundleByKey = new Map<string, CompBundle>();
     for (const { k, b } of keyedBundles) bundleByKey.set(k, b);
 
-    const resolveBundle = (title: string): CompBundle => {
+    const resolveBundle = (listing: {
+      id: string;
+      title: string;
+    }): CompBundle => {
+      const visionKind = printByListingId.get(listing.id) ?? null;
       const k = compKeyForListing(
-        title,
+        listing.title,
         setNameForMarket,
         category,
         grader,
-        grade
+        grade,
+        visionKind
       );
       return bundleByKey.get(k) ?? genericBundle;
     };
 
-    const perListingBundles = listingsFiltered.map((l) =>
-      resolveBundle(l.title)
-    );
+    const perListingBundles = listingsFiltered.map((l) => resolveBundle(l));
     const blendsForHeader = perListingBundles
       .map((b) => b.blendedPriceCents)
       .filter((c) => c > 0);
@@ -601,7 +648,7 @@ export async function GET(request: Request) {
 
     const deals: Deal[] = listingsFiltered
       .map((listing): Deal | null => {
-        const bundle = resolveBundle(listing.title);
+        const bundle = resolveBundle(listing);
         maxSoldSample = Math.max(maxSoldSample, bundle.sampleSize);
 
         const parsed = parseListingCompFromTitle(

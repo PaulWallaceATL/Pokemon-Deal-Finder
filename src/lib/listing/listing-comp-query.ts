@@ -183,9 +183,15 @@ export function compKeyForListing(
   setName: string | undefined,
   category: FinderListingCategory,
   defaultGrader: GradingCompany,
-  defaultGrade: string
+  defaultGrade: string,
+  /** When set from slab photo vision, overrides title-derived `printKind`. */
+  visionPrintKind?: ListingPrintKind | null
 ): string {
   const p = parseListingCompFromTitle(title, setName);
+  const printKind =
+    visionPrintKind != null && visionPrintKind !== "unknown"
+      ? visionPrintKind
+      : p.printKind;
   let grader = defaultGrader;
   let grade = defaultGrade;
   if (category === "graded") {
@@ -199,7 +205,7 @@ export function compKeyForListing(
   return [
     p.ebayCardQuery.toLowerCase(),
     p.catalogNumber?.toLowerCase() ?? "",
-    p.printKind,
+    printKind,
     p.isRadiant ? "rad" : "",
     category,
     grader,
