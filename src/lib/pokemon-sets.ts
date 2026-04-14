@@ -18,7 +18,7 @@ export const POKEMON_SET_ERAS = [
   "Neo",
   "Gym",
   "Base Set",
-  "Other / Promo",
+  "Promos & special sets",
 ] as const;
 
 export const POKEMON_SETS: PokemonSetEntry[] = [
@@ -196,16 +196,16 @@ export const POKEMON_SETS: PokemonSetEntry[] = [
   { value: "base1", label: "Base Set", era: "Base Set" },
 
   // ============================================================
-  // Other / Promos
+  // Promos & special sets (black star lines, collabs, oddball releases)
   // ============================================================
-  { value: "svp", label: "SV Black Star Promos", era: "Other / Promo" },
-  { value: "swshp", label: "SWSH Black Star Promos", era: "Other / Promo" },
-  { value: "smp", label: "SM Black Star Promos", era: "Other / Promo" },
-  { value: "xyp", label: "XY Black Star Promos", era: "Other / Promo" },
-  { value: "bwp", label: "BW Black Star Promos", era: "Other / Promo" },
-  { value: "hsp", label: "HGSS Black Star Promos", era: "Other / Promo" },
-  { value: "pop", label: "POP Series", era: "Other / Promo" },
-  { value: "np", label: "Nintendo Black Star Promos", era: "Other / Promo" },
-  { value: "basep", label: "WOTC Black Star Promos", era: "Other / Promo" },
-  { value: "mcd", label: "McDonald's Promos", era: "Other / Promo" },
+  { value: "svp", label: "SV Black Star Promos", era: "Promos & special sets" },
+  { value: "swshp", label: "SWSH Black Star Promos", era: "Promos & special sets" },
+  { value: "smp", label: "SM Black Star Promos", era: "Promos & special sets" },
+  { value: "xyp", label: "XY Black Star Promos", era: "Promos & special sets" },
+  { value: "bwp", label: "BW Black Star Promos", era: "Promos & special sets" },
+  { value: "hsp", label: "HGSS Black Star Promos", era: "Promos & special sets" },
+  { value: "pop", label: "POP Series", era: "Promos & special sets" },
+  { value: "np", label: "Nintendo Black Star Promos", era: "Promos & special sets" },
+  { value: "basep", label: "WOTC Black Star Promos", era: "Promos & special sets" },
+  { value: "mcd", label: "McDonald's Promos", era: "Promos & special sets" },
 ];

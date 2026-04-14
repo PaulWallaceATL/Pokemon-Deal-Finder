@@ -11,7 +11,13 @@ import {
 import { calculateFinderBlendedPrice } from "@/lib/engine/finder-price-blend";
 import { evaluateDeal } from "@/lib/engine/price-aggregator";
 import type { Deal } from "@/lib/deals/types";
+import { listingMarketReferenceCents } from "@/lib/listing/slab-reference-price";
 import { POKEMON_SETS } from "@/lib/pokemon-sets";
+import {
+  finishSearchSuffix,
+  parseCardFinish,
+  titleMatchesFinishFilter,
+} from "@/lib/pokemon/card-finish";
 import {
   buildListingQualifier,
   finderCategoryToProductType,
@@ -31,6 +37,10 @@ const SEALED_KINDS: SealedProductKind[] = [
   "booster_box",
   "booster_bundle",
   "booster_pack",
+  "blister",
+  "upc",
+  "case",
+  "other",
 ];
 
 function parseCategory(v: string | null): FinderListingCategory {
@@ -50,7 +60,7 @@ function parseSealedKind(v: string | null): SealedProductKind {
 }
 
 const MARKET_SKEW_NOTE =
-  "Many Pokémon cards share the same name across sets and printings (for example, multiple “Charizard ex” cards). Market prices can skew when listings or indexes do not match your exact printing—use the set filter and compare titles to the card you mean.";
+  "Many Pokémon cards share the same name across sets and printings (for example, multiple “Charizard ex” cards). Market prices can skew when listings or indexes do not match your exact printing—use the set filter and compare titles to the card you mean. For singles, pick holo / reverse holo / full art when it matters; promos and museum collabs usually live under Promos & special sets.";
 
 /**
  * Instant deal search -- scrapes eBay, fetches market prices from all sources,
@@ -65,6 +75,7 @@ export async function GET(request: Request) {
   const grader = parseGrader(searchParams.get("grader"));
   const grade = searchParams.get("grade")?.trim() || "10";
   const sealedKind = parseSealedKind(searchParams.get("sealedKind"));
+  const finish = parseCardFinish(searchParams.get("finish"));
 
   if (!query) {
     return NextResponse.json(
@@ -79,18 +90,27 @@ export async function GET(request: Request) {
       : undefined;
   const setNameForMarket = setNameFromCatalog ?? legacySet ?? undefined;
 
-  const listingQualifier = buildListingQualifier({
+  const baseQualifier = buildListingQualifier({
     category,
     sealedKind: category === "sealed" ? sealedKind : undefined,
     grader: category === "graded" ? grader : undefined,
     grade: category === "graded" ? grade : undefined,
   });
 
+  const finishSuffix =
+    category === "raw" && finish !== "any" ? finishSearchSuffix(finish) : "";
+
+  const listingQualifier = [baseQualifier, finishSuffix]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   const priceChartingExtra =
     category === "graded"
       ? `${grader} ${grade}`.trim()
       : category === "sealed"
-        ? listingQualifier
+        ? baseQualifier
         : undefined;
 
   const productType = finderCategoryToProductType(
@@ -178,6 +198,7 @@ export async function GET(request: Request) {
         totalListings: 0,
         category,
         listingQualifier,
+        finish: category === "raw" ? finish : undefined,
         disclaimer: MARKET_SKEW_NOTE,
         message: "No market price data found for this search",
       });
@@ -226,34 +247,50 @@ export async function GET(request: Request) {
       }
     }
 
+    const listingsFiltered =
+      category === "raw" && finish !== "any"
+        ? allListings.filter((l) => titleMatchesFinishFilter(l.title, finish))
+        : allListings;
+
     const psaPrices =
       pcGradedPrice != null
         ? {
             psa10: Math.round(pcGradedPrice * 1.8),
             psa9: pcGradedPrice,
             psa8: Math.round(pcGradedPrice * 0.6),
+            psa7: Math.round(pcGradedPrice * 0.6 * 0.78),
+            psa6: Math.round(pcGradedPrice * 0.6 * 0.62),
           }
         : null;
 
-    const deals: Deal[] = allListings
+    const deals: Deal[] = listingsFiltered
       .map((listing): Deal | null => {
+        const { referenceCents, note } = listingMarketReferenceCents({
+          listingTitle: listing.title,
+          category,
+          blendedDefault: blended.blendedPriceCents,
+          filterGrader: grader,
+          filterGrade: grade,
+          pcGradedPrice: pcGradedPrice,
+        });
+
+        if (referenceCents <= 0) return null;
+
         const discountPct = evaluateDeal(
           listing.priceCents,
-          blended.blendedPriceCents,
+          referenceCents,
           0
         );
 
         if (
           discountPct == null &&
-          listing.priceCents > blended.blendedPriceCents * 1.5
+          listing.priceCents > referenceCents * 1.5
         ) {
           return null;
         }
 
         const actualDiscount =
-          ((blended.blendedPriceCents - listing.priceCents) /
-            blended.blendedPriceCents) *
-          100;
+          ((referenceCents - listing.priceCents) / referenceCents) * 100;
 
         return {
           id: listing.id,
@@ -275,7 +312,7 @@ export async function GET(request: Request) {
           ebayImageUrl: listing.imageUrl,
           sellerName: listing.sellerName,
           condition: listing.condition,
-          blendedMarketPriceCents: blended.blendedPriceCents,
+          blendedMarketPriceCents: referenceCents,
           discountPct: Math.round(actualDiscount * 100) / 100,
           foundAt: new Date().toISOString(),
           isActive: true,
@@ -290,6 +327,7 @@ export async function GET(request: Request) {
           psaPrices,
           predictedGrade: null,
           ebayLast5AvgCents: ebaySoldAvg,
+          listingReferenceNote: note,
         };
       })
       .filter((d): d is Deal => d !== null)
@@ -299,7 +337,7 @@ export async function GET(request: Request) {
       deals,
       marketPrices,
       blendedPriceCents: blended.blendedPriceCents,
-      totalListings: allListings.length,
+      totalListings: listingsFiltered.length,
       cardInfo: tcgCard
         ? {
             name: tcgCard.name,
@@ -311,6 +349,7 @@ export async function GET(request: Request) {
         : null,
       category,
       listingQualifier,
+      finish: category === "raw" ? finish : undefined,
       sealedKind: category === "sealed" ? sealedKind : undefined,
       grader: category === "graded" ? grader : undefined,
       grade: category === "graded" ? grade : undefined,

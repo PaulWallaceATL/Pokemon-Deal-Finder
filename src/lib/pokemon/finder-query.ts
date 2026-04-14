@@ -13,7 +13,11 @@ export type SealedProductKind =
   | "etb"
   | "booster_box"
   | "booster_bundle"
-  | "booster_pack";
+  | "booster_pack"
+  | "blister"
+  | "upc"
+  | "case"
+  | "other";
 
 export type GradingCompany = "PSA" | "BGS" | "CGC" | "SGC" | "TAG";
 
@@ -39,6 +43,10 @@ export function buildListingQualifier(params: {
     booster_box: "booster box factory sealed",
     booster_bundle: "booster bundle factory sealed",
     booster_pack: "booster pack factory sealed",
+    blister: "blister pack factory sealed",
+    upc: "ultra premium collection factory sealed",
+    case: "case factory sealed pokemon",
+    other: "sealed pokemon tcg",
   };
   return byKind[kind];
 }
@@ -60,6 +68,14 @@ export function finderCategoryToProductType(
       return "booster-bundle";
     case "booster_pack":
       return "booster-pack";
+    case "blister":
+      return "blister";
+    case "upc":
+      return "upc";
+    case "case":
+      return "case";
+    case "other":
+      return "booster-box";
     default:
       return "booster-box";
   }

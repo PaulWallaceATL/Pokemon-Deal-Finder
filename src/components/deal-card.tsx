@@ -111,13 +111,20 @@ export function DealCard({ deal }: DealCardProps) {
                 ) : null}
               </div>
             </div>
-            <Badge
-              variant="default"
-              className="shrink-0 bg-green-600 text-white hover:bg-green-700"
-            >
-              <TrendingDown className="mr-1 h-3 w-3" />
-              {deal.discountPct.toFixed(0)}% off
-            </Badge>
+            <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+              <Badge
+                variant="default"
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                <TrendingDown className="mr-1 h-3 w-3" />
+                {deal.discountPct.toFixed(0)}% off
+              </Badge>
+              {deal.listingReferenceNote ? (
+                <span className="max-w-[140px] text-[10px] leading-tight text-muted-foreground">
+                  {deal.listingReferenceNote}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {/* Pricing row */}
@@ -164,6 +171,18 @@ export function DealCard({ deal }: DealCardProps) {
                   <span className={getGradeHighlight(8, deal.predictedGrade)}>
                     <span className="font-medium text-muted-foreground">8</span>{" "}
                     {formatCents(deal.psaPrices.psa8)}
+                  </span>
+                )}
+                {deal.psaPrices.psa7 != null && deal.psaPrices.psa7 > 0 && (
+                  <span>
+                    <span className="font-medium text-muted-foreground">7</span>{" "}
+                    {formatCents(deal.psaPrices.psa7)}
+                  </span>
+                )}
+                {deal.psaPrices.psa6 != null && deal.psaPrices.psa6 > 0 && (
+                  <span>
+                    <span className="font-medium text-muted-foreground">6</span>{" "}
+                    {formatCents(deal.psaPrices.psa6)}
                   </span>
                 )}
               </div>

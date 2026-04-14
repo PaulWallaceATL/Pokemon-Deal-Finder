@@ -65,6 +65,8 @@ export interface MockDeal {
     psa10: number | null;
     psa9: number | null;
     psa8: number | null;
+    psa7?: number | null;
+    psa6?: number | null;
   } | null;
   predictedGrade: PredictedGradeData | null;
   last10Sold: {

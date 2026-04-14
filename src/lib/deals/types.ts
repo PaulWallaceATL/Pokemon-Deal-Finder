@@ -39,10 +39,14 @@ export interface Deal {
     psa10: number | null;
     psa9: number | null;
     psa8: number | null;
+    psa7?: number | null;
+    psa6?: number | null;
   } | null;
   predictedGrade: PredictedGradeData | null;
   /** Instant finder: eBay sold comps average (up to five listings). */
   ebayLast5AvgCents?: number | null;
+  /** How the listing price was compared (e.g. slab-matched grade). */
+  listingReferenceNote?: string | null;
 }
 
 export function dealRowToUI(row: DealRow): Deal {
