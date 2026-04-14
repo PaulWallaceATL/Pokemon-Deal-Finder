@@ -9,7 +9,7 @@ import {
   getCollectrMarketPriceCents,
 } from "@/lib/apis/optional-marketplaces";
 import { calculateFinderBlendedPrice } from "@/lib/engine/finder-price-blend";
-import { evaluateDeal } from "@/lib/engine/price-aggregator";
+import { listingAtOrBelowReference } from "@/lib/engine/price-aggregator";
 import type { Deal } from "@/lib/deals/types";
 import { listingMarketReferenceCents } from "@/lib/listing/slab-reference-price";
 import { POKEMON_SETS } from "@/lib/pokemon-sets";
@@ -276,16 +276,7 @@ export async function GET(request: Request) {
 
         if (referenceCents <= 0) return null;
 
-        const discountPct = evaluateDeal(
-          listing.priceCents,
-          referenceCents,
-          0
-        );
-
-        if (
-          discountPct == null &&
-          listing.priceCents > referenceCents * 1.5
-        ) {
+        if (!listingAtOrBelowReference(listing.priceCents, referenceCents)) {
           return null;
         }
 

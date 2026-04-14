@@ -112,13 +112,19 @@ export function DealCard({ deal }: DealCardProps) {
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
-              <Badge
-                variant="default"
-                className="bg-green-600 text-white hover:bg-green-700"
-              >
-                <TrendingDown className="mr-1 h-3 w-3" />
-                {deal.discountPct.toFixed(0)}% off
-              </Badge>
+              {deal.ebayPriceCents <= deal.blendedMarketPriceCents ? (
+                <Badge
+                  variant="default"
+                  className="bg-green-600 text-white hover:bg-green-700"
+                >
+                  <TrendingDown className="mr-1 h-3 w-3" />
+                  {Math.max(0, deal.discountPct).toFixed(0)}% off
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">
+                  Above guide
+                </Badge>
+              )}
               {deal.listingReferenceNote ? (
                 <span className="max-w-[140px] text-[10px] leading-tight text-muted-foreground">
                   {deal.listingReferenceNote}
@@ -135,9 +141,19 @@ export function DealCard({ deal }: DealCardProps) {
             <span className="text-sm text-muted-foreground line-through">
               {formatCents(deal.blendedMarketPriceCents)}
             </span>
-            <span className="text-xs font-medium text-green-600">
-              Save {formatCents(deal.blendedMarketPriceCents - deal.ebayPriceCents)}
-            </span>
+            {deal.ebayPriceCents < deal.blendedMarketPriceCents ? (
+              <span className="text-xs font-medium text-green-600">
+                Save{" "}
+                {formatCents(deal.blendedMarketPriceCents - deal.ebayPriceCents)}
+              </span>
+            ) : deal.ebayPriceCents === deal.blendedMarketPriceCents ? (
+              <span className="text-xs text-muted-foreground">At guide</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {formatCents(deal.ebayPriceCents - deal.blendedMarketPriceCents)}{" "}
+                over guide
+              </span>
+            )}
           </div>
 
           {showPriceBreakdown ? (

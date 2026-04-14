@@ -67,3 +67,15 @@ export function evaluateDeal(
 
   return null;
 }
+
+/**
+ * True when the listing price is not above our reference guide.
+ * Strict ≤ reference so overpriced listings never appear as deals in the finder.
+ */
+export function listingAtOrBelowReference(
+  listingPriceCents: number,
+  referencePriceCents: number
+): boolean {
+  if (referencePriceCents <= 0) return false;
+  return listingPriceCents <= referencePriceCents;
+}
