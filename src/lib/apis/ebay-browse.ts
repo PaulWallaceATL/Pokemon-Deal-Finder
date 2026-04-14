@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { parseScrapedSellerFeedbackCount } from "@/lib/listing/seller-feedback";
 
 const USE_MOCK = process.env.USE_MOCK_DATA === "true";
 
@@ -11,6 +12,8 @@ export interface EbayListing {
   imageUrls: string[];
   sellerName: string;
   condition: string;
+  /** Browse API `seller.feedbackScore`; scrape may omit (undefined). */
+  sellerFeedbackScore?: number;
 }
 
 const EBAY_APP_ID = process.env.EBAY_APP_ID;
@@ -148,12 +151,20 @@ async function searchViaApi(
   const JUNK_PATTERNS = /\b(code|online code|digital|tcg live|ptcgo|lot of|bulk|custom|proxy|repack|sleeve|binder|toploader|supplies)\b/i;
 
   return items
-    .filter((item: { title: string; price: { value: string } }) => {
-      if (JUNK_PATTERNS.test(item.title)) return false;
-      const price = parseFloat(item.price?.value ?? "0");
-      if (price < 0.50) return false;
-      return true;
-    })
+    .filter(
+      (item: {
+        title: string;
+        price: { value: string };
+        seller?: { username: string; feedbackScore?: number };
+      }) => {
+        if (JUNK_PATTERNS.test(item.title)) return false;
+        const price = parseFloat(item.price?.value ?? "0");
+        if (price < 0.50) return false;
+        const fb = item.seller?.feedbackScore ?? 0;
+        if (fb <= 0) return false;
+        return true;
+      }
+    )
     .slice(0, 20)
     .map(
       (item: {
@@ -163,7 +174,7 @@ async function searchViaApi(
         itemWebUrl: string;
         image?: { imageUrl: string };
         thumbnailImages?: { imageUrl: string }[];
-        seller?: { username: string };
+        seller?: { username: string; feedbackScore?: number };
         condition?: string;
         conditionId?: string;
       }): EbayListing => {
@@ -178,6 +189,7 @@ async function searchViaApi(
           imageUrls: [imageUrl],
           sellerName: item.seller?.username ?? "unknown",
           condition: item.condition ?? "Not Specified",
+          sellerFeedbackScore: item.seller?.feedbackScore ?? 0,
         };
       }
     );
@@ -228,9 +240,12 @@ async function searchViaScrape(
     const hiresUrl = toHighRes(thumbUrl);
     const conditionText = $item.find(".SECONDARY_INFO").text().trim();
     const sellerInfo = $item.find(".s-item__seller-info-text, .s-item__seller-info").text().trim();
+    const parsedFb = parseScrapedSellerFeedbackCount(sellerInfo);
 
     const idMatch = link.match(/\/itm\/(\d+)/);
     const itemId = idMatch?.[1] ?? `eb-${Date.now()}-${listings.length}`;
+
+    if (parsedFb === 0) return;
 
     listings.push({
       itemId,
@@ -241,6 +256,7 @@ async function searchViaScrape(
       imageUrls: [hiresUrl],
       sellerName: sellerInfo || "unknown",
       condition: conditionText || "Not Specified",
+      sellerFeedbackScore: parsedFb ?? undefined,
     });
   });
 
@@ -262,6 +278,7 @@ export async function searchEbayListings(
     return mockListings.map((l) => ({
       ...l,
       title: `${cardName} ${cardSet ?? ""} ${listingQualifier ?? ""} ${l.condition}`.trim(),
+      sellerFeedbackScore: 250,
     }));
   }
 

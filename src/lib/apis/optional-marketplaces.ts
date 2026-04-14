@@ -1,9 +1,8 @@
 /**
- * Optional third-party market price hooks (Collectr, Alt, etc.).
- *
- * Configure HTTPS endpoints that accept POST JSON and return
- * `{ "priceCents": number }`. No public Collectr/Alt API is wired here;
- * these env vars let you plug in your own bridge or future official APIs.
+ * Collectr (collectr.com) pricing for the finder: set `COLLECTR_MARKET_API_URL`
+ * to an HTTPS endpoint that accepts POST JSON
+ * `{ cardName, setName?, category, grader?, grade? }` and returns `{ priceCents: number }`
+ * (English / US market price your bridge resolves from Collectr).
  */
 
 async function postPriceCents(

@@ -34,6 +34,8 @@ export interface Deal {
     pricechartingRaw: number | null;
     pricechartingGraded: number | null;
     ebaySoldAvg: number | null;
+    /** Instant finder: Collectr bridge (see collectr.com). */
+    collectr?: number | null;
   };
   psaPrices: {
     psa10: number | null;
@@ -79,6 +81,7 @@ export function dealRowToUI(row: DealRow): Deal {
       pricechartingRaw: row.prices_pricecharting_raw,
       pricechartingGraded: row.prices_pricecharting_graded,
       ebaySoldAvg: row.prices_ebay_sold_avg,
+      collectr: null,
     },
     psaPrices: hasPsa
       ? {

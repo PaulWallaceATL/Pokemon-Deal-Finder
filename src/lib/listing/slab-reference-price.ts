@@ -35,7 +35,7 @@ function normalizedCurveGrade(company: string, grade: number): number {
   return grade;
 }
 
-function psaAnchorsFromPcGraded(pcGraded: number): {
+function psaAnchorsFromMarketAnchor(anchorCents: number): {
   p10: number;
   p9: number;
   p8: number;
@@ -43,9 +43,9 @@ function psaAnchorsFromPcGraded(pcGraded: number): {
   p6: number;
   p5: number;
 } {
-  const p9 = pcGraded;
-  const p10 = Math.round(pcGraded * 1.8);
-  const p8 = Math.round(pcGraded * 0.6);
+  const p9 = anchorCents;
+  const p10 = Math.round(anchorCents * 1.8);
+  const p8 = Math.round(anchorCents * 0.6);
   const p7 = Math.round(p8 * 0.78);
   const p6 = Math.round(p8 * 0.62);
   const p5 = Math.round(p8 * 0.48);
@@ -53,20 +53,20 @@ function psaAnchorsFromPcGraded(pcGraded: number): {
 }
 
 /**
- * Reference price for a graded single, from PriceCharting graded anchor and
- * a simple PSA-style ladder (extrapolated below 8).
+ * Reference price for a graded single from a Collectr+eBay anchor and a
+ * simple PSA-style ladder (extrapolated below 8).
  */
 export function gradedReferencePriceCents(
   company: string,
   grade: number,
-  pcGradedPrice: number | null,
+  gradedAnchorCents: number | null,
   blendedFallback: number
 ): number {
-  if (pcGradedPrice == null || pcGradedPrice <= 0) {
+  if (gradedAnchorCents == null || gradedAnchorCents <= 0) {
     return blendedFallback;
   }
   const g = normalizedCurveGrade(company, grade);
-  const { p10, p9, p8, p7, p6, p5 } = psaAnchorsFromPcGraded(pcGradedPrice);
+  const { p10, p9, p8, p7, p6, p5 } = psaAnchorsFromMarketAnchor(gradedAnchorCents);
 
   const points: [number, number][] = [
     [10, p10],
@@ -99,7 +99,8 @@ export function listingMarketReferenceCents(params: {
   blendedDefault: number;
   filterGrader: GradingCompany;
   filterGrade: string;
-  pcGradedPrice: number | null;
+  /** Collectr+eBay blended anchor (treated as ~PSA9-scale pivot for the ladder). */
+  gradedAnchorCents: number | null;
 }): { referenceCents: number; note: string | null } {
   const {
     listingTitle,
@@ -107,7 +108,7 @@ export function listingMarketReferenceCents(params: {
     blendedDefault,
     filterGrader,
     filterGrade,
-    pcGradedPrice,
+    gradedAnchorCents,
   } = params;
 
   if (category === "raw" || category === "sealed") {
@@ -122,7 +123,7 @@ export function listingMarketReferenceCents(params: {
     const ref = gradedReferencePriceCents(
       slab.company,
       slab.grade,
-      pcGradedPrice,
+      gradedAnchorCents,
       blendedDefault
     );
     return {
@@ -135,7 +136,7 @@ export function listingMarketReferenceCents(params: {
     const ref = gradedReferencePriceCents(
       filterGrader,
       filterGradeNum,
-      pcGradedPrice,
+      gradedAnchorCents,
       blendedDefault
     );
     return {

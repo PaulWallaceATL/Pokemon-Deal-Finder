@@ -40,11 +40,17 @@ export function DealCard({ deal }: DealCardProps) {
   const linkTarget = isLiveResult ? "_blank" : undefined;
   const linkRel = isLiveResult ? "noopener noreferrer" : undefined;
 
+  const finderCollectrEbayPriceRow =
+    deal.prices.tcgplayer == null &&
+    deal.prices.pricechartingRaw == null &&
+    deal.prices.pricechartingGraded == null;
+
   const showPriceBreakdown =
     deal.prices.tcgplayer != null ||
     deal.prices.pricechartingRaw != null ||
     deal.prices.pricechartingGraded != null ||
-    deal.prices.ebaySoldAvg != null;
+    deal.prices.ebaySoldAvg != null ||
+    deal.prices.collectr != null;
 
   return (
     <Card className="group relative overflow-hidden transition-shadow hover:shadow-lg">
@@ -158,16 +164,29 @@ export function DealCard({ deal }: DealCardProps) {
 
           {showPriceBreakdown ? (
             <div className="rounded-md border bg-muted/40 px-3 py-2">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
-                <PriceItem label="TCGPlayer" value={deal.prices.tcgplayer} />
-                <PriceItem label="PC Raw" value={deal.prices.pricechartingRaw} />
-                <PriceItem label="eBay last 5 avg" value={deal.prices.ebaySoldAvg} />
-                <PriceItem label="PC Graded" value={deal.prices.pricechartingGraded} />
-              </div>
+              {finderCollectrEbayPriceRow ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <PriceItem
+                    label="Collectr (collectr.com)"
+                    value={deal.prices.collectr ?? null}
+                  />
+                  <PriceItem
+                    label="eBay last 5 sold"
+                    value={deal.prices.ebaySoldAvg}
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+                  <PriceItem label="TCGPlayer" value={deal.prices.tcgplayer} />
+                  <PriceItem label="PC Raw" value={deal.prices.pricechartingRaw} />
+                  <PriceItem label="eBay last 5 avg" value={deal.prices.ebaySoldAvg} />
+                  <PriceItem label="PC Graded" value={deal.prices.pricechartingGraded} />
+                </div>
+              )}
             </div>
           ) : null}
 
-          {deal.psaPrices ? (
+          {deal.psaPrices && !finderCollectrEbayPriceRow ? (
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-3 text-xs">
                 <span className="font-semibold text-muted-foreground">PSA Graded:</span>

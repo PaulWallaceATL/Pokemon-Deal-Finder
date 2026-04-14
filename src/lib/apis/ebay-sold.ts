@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { parseScrapedSellerFeedbackCount } from "@/lib/listing/seller-feedback";
 
 const USE_MOCK = process.env.USE_MOCK_DATA === "true";
 
@@ -14,7 +15,13 @@ export interface EbaySoldResult {
   averagePriceCents: number;
 }
 
+export interface EbaySoldOptions {
+  /** Drop comps whose titles fail this check (e.g. English-only). */
+  titleFilter?: (title: string) => boolean;
+}
+
 const SOLD_SAMPLE_SIZE = 5;
+const SOLD_FETCH_CAP = 24;
 
 const SCRAPE_HEADERS = {
   "User-Agent":
@@ -38,9 +45,6 @@ function parsePriceCents(text: string | undefined): number | null {
   return isNaN(parsed) ? null : Math.round(parsed * 100);
 }
 
-/**
- * Get an OAuth application token from eBay.
- */
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getEbayOAuthToken(): Promise<string | null> {
@@ -77,13 +81,16 @@ async function getEbayOAuthToken(): Promise<string | null> {
   return cachedToken.token;
 }
 
-/**
- * Search eBay sold items via the Browse API (filter for SOLD items).
- * The Browse API doesn't directly provide sold/completed listings,
- * so we search for recently ended items and use those prices as a proxy.
- */
+function averageFromItems(items: EbaySoldItem[]): number {
+  if (items.length === 0) return 0;
+  return Math.round(
+    items.reduce((sum, i) => sum + i.priceCents, 0) / items.length
+  );
+}
+
 async function soldViaApi(
-  query: string
+  query: string,
+  options?: EbaySoldOptions
 ): Promise<EbaySoldResult> {
   const token = await getEbayOAuthToken();
   if (!token) return { items: [], averagePriceCents: 0 };
@@ -93,7 +100,7 @@ async function soldViaApi(
     category_ids: "183454",
     filter: "buyingOptions:{FIXED_PRICE}",
     sort: "newlyListed",
-    limit: String(SOLD_SAMPLE_SIZE),
+    limit: String(SOLD_FETCH_CAP),
   });
 
   const response = await fetch(
@@ -111,27 +118,32 @@ async function soldViaApi(
   const data = await response.json();
   const apiItems = data.itemSummaries ?? [];
 
-  const items: EbaySoldItem[] = apiItems.slice(0, SOLD_SAMPLE_SIZE).map(
-    (item: { title: string; price: { value: string } }) => ({
+  const picked: EbaySoldItem[] = [];
+  for (const item of apiItems as {
+    title: string;
+    price: { value: string };
+    seller?: { feedbackScore?: number };
+  }[]) {
+    const fb = item.seller?.feedbackScore ?? 0;
+    if (fb <= 0) continue;
+    if (options?.titleFilter && !options.titleFilter(item.title)) continue;
+    picked.push({
       title: item.title,
       priceCents: Math.round(parseFloat(item.price?.value ?? "0") * 100),
       soldDate: new Date().toISOString().split("T")[0],
-    })
-  );
+    });
+    if (picked.length >= SOLD_SAMPLE_SIZE) break;
+  }
 
-  const averagePriceCents =
-    items.length > 0
-      ? Math.round(items.reduce((sum, i) => sum + i.priceCents, 0) / items.length)
-      : 0;
-
-  return { items, averagePriceCents };
+  return {
+    items: picked,
+    averagePriceCents: averageFromItems(picked),
+  };
 }
 
-/**
- * Scrape eBay sold listings (fallback).
- */
 async function soldViaScrape(
-  query: string
+  query: string,
+  options?: EbaySoldOptions
 ): Promise<EbaySoldResult> {
   const searchUrl =
     `https://www.ebay.com/sch/i.html?` +
@@ -160,9 +172,18 @@ async function soldViaScrape(
     const title = $item.find(".s-item__title span, .s-item__title").first().text().trim();
     if (!title || title === "Shop on eBay") return;
 
+    if (options?.titleFilter && !options.titleFilter(title)) return;
+
     const priceText = $item.find(".s-item__price").first().text();
     const priceCents = parsePriceCents(priceText);
     if (!priceCents || priceCents <= 0) return;
+
+    const sellerLine = $item
+      .find(".s-item__seller-info-text, .s-item__seller-info")
+      .text()
+      .trim();
+    const fb = parseScrapedSellerFeedbackCount(sellerLine);
+    if (fb === 0) return;
 
     const dateText =
       $item.find(".s-item__ended-date, .s-item__endedDate, .POSITIVE").text().trim();
@@ -180,12 +201,10 @@ async function soldViaScrape(
     items.push({ title, priceCents, soldDate });
   });
 
-  const averagePriceCents =
-    items.length > 0
-      ? Math.round(items.reduce((sum, i) => sum + i.priceCents, 0) / items.length)
-      : 0;
-
-  return { items, averagePriceCents };
+  return {
+    items,
+    averagePriceCents: averageFromItems(items),
+  };
 }
 
 /**
@@ -195,17 +214,15 @@ async function soldViaScrape(
 export async function getEbaySoldAverage(
   cardName: string,
   cardSet?: string,
-  listingQualifier?: string
+  listingQualifier?: string,
+  options?: EbaySoldOptions
 ): Promise<EbaySoldResult> {
   if (USE_MOCK) {
     const items = mockSoldItems.slice(0, SOLD_SAMPLE_SIZE).map((i) => ({
       ...i,
       title: `${cardName} ${cardSet ?? ""} ${listingQualifier ?? ""} - ${i.title}`.trim(),
     }));
-    const avg = Math.round(
-      items.reduce((sum, i) => sum + i.priceCents, 0) / items.length
-    );
-    return { items, averagePriceCents: avg };
+    return { items, averagePriceCents: averageFromItems(items) };
   }
 
   const query = [cardName, cardSet, listingQualifier]
@@ -214,15 +231,14 @@ export async function getEbaySoldAverage(
     .replace(/\s+/g, " ")
     .trim();
 
-  // Prefer API
   if (process.env.EBAY_APP_ID) {
     try {
-      const result = await soldViaApi(query);
+      const result = await soldViaApi(query, options);
       if (result.items.length > 0) return result;
     } catch (err) {
       console.warn("eBay sold API failed, trying scrape:", err);
     }
   }
 
-  return soldViaScrape(query);
+  return soldViaScrape(query, options);
 }

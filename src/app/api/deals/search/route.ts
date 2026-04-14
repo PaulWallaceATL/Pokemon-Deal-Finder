@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { searchEbayListings } from "@/lib/apis/ebay-browse";
 import { getEbaySoldAverage } from "@/lib/apis/ebay-sold";
 import { searchCards } from "@/lib/apis/pokemon-tcg";
-import { getPriceChartingPrices } from "@/lib/apis/pricecharting";
 import { searchFacebookMarketplace } from "@/lib/apis/facebook-marketplace";
-import {
-  getAltAppMarketPriceCents,
-  getCollectrMarketPriceCents,
-} from "@/lib/apis/optional-marketplaces";
-import { calculateFinderBlendedPrice } from "@/lib/engine/finder-price-blend";
+import { getCollectrMarketPriceCents } from "@/lib/apis/optional-marketplaces";
+import { calculateCollectrEbayBlend } from "@/lib/engine/finder-price-blend";
+import { titleLooksJapaneseImport } from "@/lib/listing/english-comps";
 import { listingAtOrBelowReference } from "@/lib/engine/price-aggregator";
 import type { Deal } from "@/lib/deals/types";
 import { listingMarketReferenceCents } from "@/lib/listing/slab-reference-price";
@@ -61,7 +58,7 @@ function parseSealedKind(v: string | null): SealedProductKind {
 }
 
 const MARKET_SKEW_NOTE =
-  "Many Pokémon cards share the same name across sets and printings (for example, multiple “Charizard ex” cards). Market prices can skew when listings or indexes do not match your exact printing—use the set filter and compare titles to the card you mean. For singles, pick holo / reverse holo / full art when it matters; promos and museum collabs usually live under Promos & special sets.";
+  "Market value uses Collectr (when COLLECTR_MARKET_API_URL is set) and eBay last-five English sold comps; Japanese import titles are filtered out so English PSA comps are not mixed with JP. Many cards share the same name across sets—use the set filter. See .env.local.example for a Collectr bridge.";
 
 /**
  * Instant deal search -- scrapes eBay, fetches market prices from all sources,
@@ -107,13 +104,6 @@ export async function GET(request: Request) {
     .replace(/\s+/g, " ")
     .trim();
 
-  const priceChartingExtra =
-    category === "graded"
-      ? `${grader} ${grade}`.trim()
-      : category === "sealed"
-        ? baseQualifier
-        : undefined;
-
   const productType = finderCategoryToProductType(
     category,
     category === "sealed" ? sealedKind : undefined
@@ -131,66 +121,41 @@ export async function GET(request: Request) {
     const tcgSearchOpts =
       setId && setId !== "all" ? { setId } : undefined;
 
-    const [
-      ebayResult,
-      fbResult,
-      ebaySoldResult,
-      pcResult,
-      tcgResult,
-      collectrResult,
-      altResult,
-    ] = await Promise.allSettled([
-      searchEbayListings(query, setNameForMarket, listingQualifier, {
-        allowBundleKeyword: category === "sealed",
-      }),
-      searchFacebookMarketplace(query, setNameForMarket, listingQualifier),
-      getEbaySoldAverage(query, setNameForMarket, listingQualifier),
-      getPriceChartingPrices(query, setNameForMarket, priceChartingExtra),
-      searchCards(query, tcgSearchOpts),
-      getCollectrMarketPriceCents(marketContext),
-      getAltAppMarketPriceCents(marketContext),
-    ]);
+    const englishComp = (title: string) => !titleLooksJapaneseImport(title);
+
+    const [ebayResult, fbResult, ebaySoldResult, tcgResult, collectrResult] =
+      await Promise.allSettled([
+        searchEbayListings(query, setNameForMarket, listingQualifier, {
+          allowBundleKeyword: category === "sealed",
+        }),
+        searchFacebookMarketplace(query, setNameForMarket, listingQualifier),
+        getEbaySoldAverage(query, setNameForMarket, listingQualifier, {
+          titleFilter: englishComp,
+        }),
+        searchCards(query, tcgSearchOpts),
+        getCollectrMarketPriceCents(marketContext),
+      ]);
 
     const tcgCards =
       tcgResult.status === "fulfilled" ? tcgResult.value : [];
     const tcgCard = tcgCards[0] ?? null;
-
-    const tcgplayerPrice = tcgCard?.tcgplayerPriceCents ?? null;
 
     const ebaySoldAvg =
       ebaySoldResult.status === "fulfilled"
         ? ebaySoldResult.value.averagePriceCents || null
         : null;
 
-    const pcRawPrice =
-      pcResult.status === "fulfilled" ? pcResult.value.rawPriceCents : null;
-
-    const pcGradedPrice =
-      pcResult.status === "fulfilled"
-        ? pcResult.value.gradedPriceCents
-        : null;
-
     const collectrPrice =
       collectrResult.status === "fulfilled" ? collectrResult.value : null;
-    const altAppPrice =
-      altResult.status === "fulfilled" ? altResult.value : null;
 
     const marketPrices = {
-      tcgplayer: tcgplayerPrice,
-      pricecharting_raw: pcRawPrice,
-      pricecharting_graded: pcGradedPrice,
-      ebay_sold_avg: ebaySoldAvg,
       collectr: collectrPrice,
-      alt_app: altAppPrice,
+      ebay_sold_avg: ebaySoldAvg,
     };
 
-    const blended = calculateFinderBlendedPrice(category, {
-      tcgplayer: tcgplayerPrice,
-      pricecharting_raw: pcRawPrice,
-      pricecharting_graded: pcGradedPrice,
-      ebay_sold_avg: ebaySoldAvg,
+    const blended = calculateCollectrEbayBlend({
       collectr: collectrPrice,
-      alt_app: altAppPrice,
+      ebay_sold_avg: ebaySoldAvg,
     });
 
     if (blended.blendedPriceCents === 0) {
@@ -203,7 +168,8 @@ export async function GET(request: Request) {
         listingQualifier,
         finish: category === "raw" ? finish : undefined,
         disclaimer: MARKET_SKEW_NOTE,
-        message: "No market price data found for this search",
+        message:
+          "No market price data: configure COLLECTR_MARKET_API_URL for Collectr, and ensure eBay sold comps return (English-only, sellers with feedback).",
       });
     }
 
@@ -255,23 +221,16 @@ export async function GET(request: Request) {
         ? allListings.filter((l) => titleMatchesFinishFilter(l.title, finish))
         : allListings;
 
-    const listingsFiltered =
+    let listingsFiltered =
       category === "sealed"
         ? listingsAfterFinish.filter((l) =>
             listingTitleMatchesSealedIntent(l.title, sealedKind)
           )
         : listingsAfterFinish;
 
-    const psaPrices =
-      pcGradedPrice != null
-        ? {
-            psa10: Math.round(pcGradedPrice * 1.8),
-            psa9: pcGradedPrice,
-            psa8: Math.round(pcGradedPrice * 0.6),
-            psa7: Math.round(pcGradedPrice * 0.6 * 0.78),
-            psa6: Math.round(pcGradedPrice * 0.6 * 0.62),
-          }
-        : null;
+    listingsFiltered = listingsFiltered.filter(
+      (l) => !titleLooksJapaneseImport(l.title)
+    );
 
     const deals: Deal[] = listingsFiltered
       .map((listing): Deal | null => {
@@ -281,7 +240,7 @@ export async function GET(request: Request) {
           blendedDefault: blended.blendedPriceCents,
           filterGrader: grader,
           filterGrade: grade,
-          pcGradedPrice: pcGradedPrice,
+          gradedAnchorCents: blended.blendedPriceCents,
         });
 
         if (referenceCents <= 0) return null;
@@ -320,12 +279,13 @@ export async function GET(request: Request) {
           listingSource: listing.source,
           productType,
           prices: {
-            tcgplayer: tcgplayerPrice,
-            pricechartingRaw: pcRawPrice,
-            pricechartingGraded: pcGradedPrice,
+            tcgplayer: null,
+            pricechartingRaw: null,
+            pricechartingGraded: null,
             ebaySoldAvg: ebaySoldAvg,
+            collectr: collectrPrice,
           },
-          psaPrices,
+          psaPrices: null,
           predictedGrade: null,
           ebayLast5AvgCents: ebaySoldAvg,
           listingReferenceNote: note,

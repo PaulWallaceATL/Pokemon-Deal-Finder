@@ -60,6 +60,7 @@ export interface MockDeal {
     pricechartingRaw: number | null;
     pricechartingGraded: number | null;
     ebaySoldAvg: number | null;
+    collectr?: number | null;
   };
   psaPrices: {
     psa10: number | null;

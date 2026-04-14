@@ -22,12 +22,8 @@ import type { CardFinishFilter } from "@/lib/pokemon/card-finish";
 import type { SealedProductKind } from "@/lib/pokemon/finder-query";
 
 interface MarketPrices {
-  tcgplayer: number | null;
-  pricecharting_raw: number | null;
-  pricecharting_graded: number | null;
-  ebay_sold_avg: number | null;
   collectr: number | null;
-  alt_app: number | null;
+  ebay_sold_avg: number | null;
 }
 
 interface SearchResponse {
@@ -389,41 +385,21 @@ export function DealSearch() {
                       ? formatCents(results.blendedPriceCents)
                       : "N/A"}
                   </p>
-                  {results.marketPrices.pricecharting_graded != null &&
-                  (results.category === "raw" ||
-                    results.category === "graded") ? (
-                    <p className="mt-1 max-w-md text-[11px] text-muted-foreground">
-                      PSA-style graded guide (PriceCharting graded index):{" "}
-                      <span className="font-semibold text-foreground">
-                        {formatCents(results.marketPrices.pricecharting_graded)}
-                      </span>
-                      . Per-listing % off uses the slab grade in the title when
-                      possible.
-                    </p>
-                  ) : null}
+                  <p className="mt-1 max-w-md text-[11px] text-muted-foreground">
+                    Blend of Collectr (when configured) and eBay last-five sold
+                    (English listings, sellers with feedback). Graded % off uses
+                    the slab in the title vs that blend.
+                  </p>
                 </div>
                 <div className="h-10 w-px bg-border" />
                 <PricePill
-                  label="TCGPlayer"
-                  value={results.marketPrices.tcgplayer}
-                />
-                <PricePill
-                  label="PriceCharting raw"
-                  value={results.marketPrices.pricecharting_raw}
-                />
-                <PricePill
-                  label="eBay last 5 avg (sold)"
-                  value={results.marketPrices.ebay_sold_avg}
-                />
-                <PricePill
-                  label="PriceCharting graded"
-                  value={results.marketPrices.pricecharting_graded}
-                />
-                <PricePill
-                  label="Collectr"
+                  label="Collectr (collectr.com)"
                   value={results.marketPrices.collectr}
                 />
-                <PricePill label="Alt" value={results.marketPrices.alt_app} />
+                <PricePill
+                  label="eBay last 5 sold"
+                  value={results.marketPrices.ebay_sold_avg}
+                />
                 <div className="ml-auto flex flex-col items-end gap-1 text-sm text-muted-foreground">
                   <span>{results.totalListings} listings found</span>
                   {results.ebaySoldSampleSize != null ? (
