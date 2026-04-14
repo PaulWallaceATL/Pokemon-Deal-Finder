@@ -4,6 +4,7 @@ import { getEbaySoldAverage } from "@/lib/apis/ebay-sold";
 import { searchCards } from "@/lib/apis/pokemon-tcg";
 import { searchFacebookMarketplace } from "@/lib/apis/facebook-marketplace";
 import { getCollectrMarketPriceCents } from "@/lib/apis/optional-marketplaces";
+import { getPokemonTcgMarketPriceCentsForListing } from "@/lib/apis/pokemontcg-listing-price";
 import { getTcgCollectorListingMatch } from "@/lib/apis/tcg-collector";
 import { calculateCollectrEbayBlend } from "@/lib/engine/finder-price-blend";
 import { titleLooksJapaneseImport } from "@/lib/listing/english-comps";
@@ -74,7 +75,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Raw mode uses completed sold eBay pages only (no Browse API fallback) plus title filters. Optional: COLLECTR_MARKET_API_URL (bridge) and TCG_COLLECTOR_ACCESS_TOKEN (https://www.tcgcollector.com/api) for catalog variants and prices. Graded mode matches slab grade in each title. Japanese imports are filtered out.";
+  "Raw mode uses completed sold eBay pages only (no Browse API fallback) plus title filters. Optional: COLLECTR_MARKET_API_URL (bridge). Catalog price in the blend uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; otherwise raw listings use Pokémon TCG API (api.pokemontcg.io) TCGPlayer market when available (optional POKEMON_TCG_API_KEY for rate limits). Graded mode matches slab grade in each title. Japanese imports are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -90,13 +91,23 @@ function medianPositiveCents(values: number[]): number | null {
 type CompBundle = {
   ebaySoldAvg: number | null;
   collectr: number | null;
-  tcgCollector: number | null;
+  /** tcgcollector.com API when `TCG_COLLECTOR_ACCESS_TOKEN` is set. */
+  tcgCollectorPartner: number | null;
+  /** Raw finder: Pokémon TCG API TCGPlayer market (and optional scrape) when partner price is missing. */
+  pokemonTcgplayerMarket: number | null;
   blendedPriceCents: number;
   sampleSize: number;
   /** Raw finder: PSA 10 Collectr hint for display only (not in blend). */
   collectrGradedPsa10: number | null;
   tcgCollectorVariants: { label: string; priceCents: number | null }[];
 };
+
+function catalogPriceForBlend(b: CompBundle): number | null {
+  const p = b.tcgCollectorPartner;
+  if (p != null && p > 0) return p;
+  const m = b.pokemonTcgplayerMarket;
+  return m != null && m > 0 ? m : null;
+}
 
 function buildEffectiveListingQualifier(params: {
   category: FinderListingCategory;
@@ -209,67 +220,93 @@ async function fetchListingCompBundle(args: {
           soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr)
       : args.soldTitleFilter;
 
-  const [soldRes, collectrMain, collectrPsa10Side, tcgMatch] = await Promise.all([
-    getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
-      titleFilter: gradedSoldTitleFilter,
-      /** Raw: never use Browse API for “sold” — it mixes active slab BINs. */
-      scrapeOnly: args.category === "raw",
-    }),
-    getCollectrMarketPriceCents({
-      cardName: collectrName,
-      setName: args.setName,
-      category: args.category,
-      grader: collectrGrader,
-      grade: collectrGradeStr,
-      cardNumber: isSealed ? undefined : parsed.catalogNumber,
-      listingTitle: args.listingTitle,
-      variantHints,
-      explicitlyUngraded: args.category === "raw" ? true : undefined,
-    }),
-    args.category === "raw"
-      ? getCollectrMarketPriceCents({
-          cardName: collectrName,
-          setName: args.setName,
-          category: "graded",
-          grader: "PSA",
-          grade: "10",
-          cardNumber: isSealed ? undefined : parsed.catalogNumber,
-          listingTitle: args.listingTitle,
-          variantHints,
-        })
-      : Promise.resolve(null),
-    getTcgCollectorListingMatch({
-      cardName: collectrName,
-      ebayListingTitle: args.listingTitle,
-      setName: args.setName,
-      catalogNumber: isSealed ? undefined : parsed.catalogNumber,
-      category: args.category,
-    }),
-  ]);
+  const usePokemonCatalog =
+    !isSealed && args.category === "raw";
+
+  const [soldRes, collectrMain, collectrPsa10Side, tcgMatch, pokemonTcgplayerMarket] =
+    await Promise.all([
+      getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
+        titleFilter: gradedSoldTitleFilter,
+        /** Raw: never use Browse API for “sold” — it mixes active slab BINs. */
+        scrapeOnly: args.category === "raw",
+      }),
+      getCollectrMarketPriceCents({
+        cardName: collectrName,
+        setName: args.setName,
+        category: args.category,
+        grader: collectrGrader,
+        grade: collectrGradeStr,
+        cardNumber: isSealed ? undefined : parsed.catalogNumber,
+        listingTitle: args.listingTitle,
+        variantHints,
+        explicitlyUngraded: args.category === "raw" ? true : undefined,
+      }),
+      args.category === "raw"
+        ? getCollectrMarketPriceCents({
+            cardName: collectrName,
+            setName: args.setName,
+            category: "graded",
+            grader: "PSA",
+            grade: "10",
+            cardNumber: isSealed ? undefined : parsed.catalogNumber,
+            listingTitle: args.listingTitle,
+            variantHints,
+          })
+        : Promise.resolve(null),
+      getTcgCollectorListingMatch({
+        cardName: collectrName,
+        ebayListingTitle: args.listingTitle,
+        setName: args.setName,
+        catalogNumber: isSealed ? undefined : parsed.catalogNumber,
+        category: args.category,
+      }),
+      usePokemonCatalog
+        ? getPokemonTcgMarketPriceCentsForListing({
+            cardName: collectrName,
+            setName: args.setName,
+            catalogNumber: parsed.catalogNumber,
+          })
+        : Promise.resolve(null),
+    ]);
 
   const ebayAvg =
     soldRes.averagePriceCents > 0 ? soldRes.averagePriceCents : null;
-  const tcgCollector = tcgMatch?.primaryPriceCents ?? null;
+  const tcgPartner =
+    tcgMatch?.primaryPriceCents != null && tcgMatch.primaryPriceCents > 0
+      ? tcgMatch.primaryPriceCents
+      : null;
+  const pokemonMarket =
+    tcgPartner == null &&
+    pokemonTcgplayerMarket != null &&
+    pokemonTcgplayerMarket > 0
+      ? pokemonTcgplayerMarket
+      : null;
   const tcgCollectorVariants =
     tcgMatch?.variants.map((v) => ({
       label: v.variantLabel,
       priceCents: v.priceCents,
     })) ?? [];
 
-  const blend = calculateCollectrEbayBlend({
-    collectr: collectrMain,
-    ebay_sold_avg: ebayAvg,
-    tcg_collector: tcgCollector,
-  });
-
-  return {
+  const bundle: CompBundle = {
     ebaySoldAvg: ebayAvg,
     collectr: collectrMain,
-    tcgCollector,
-    blendedPriceCents: blend.blendedPriceCents,
+    tcgCollectorPartner: tcgPartner,
+    pokemonTcgplayerMarket: pokemonMarket,
+    blendedPriceCents: 0,
     sampleSize: soldRes.items.length,
     collectrGradedPsa10: collectrPsa10Side,
     tcgCollectorVariants,
+  };
+
+  const blend = calculateCollectrEbayBlend({
+    collectr: collectrMain,
+    ebay_sold_avg: ebayAvg,
+    tcg_collector: catalogPriceForBlend(bundle),
+  });
+
+  return {
+    ...bundle,
+    blendedPriceCents: blend.blendedPriceCents,
   };
 }
 
@@ -536,7 +573,7 @@ export async function GET(request: Request) {
       ),
       tcg_collector: medianPositiveCents(
         perListingBundles
-          .map((b) => b.tcgCollector)
+          .map((b) => catalogPriceForBlend(b))
           .filter((c): c is number => c != null && c > 0)
       ),
     };
@@ -608,7 +645,8 @@ export async function GET(request: Request) {
             collectr: bundle.collectr,
             collectrGradedPsa10:
               category === "raw" ? bundle.collectrGradedPsa10 : null,
-            tcgCollector: bundle.tcgCollector,
+            tcgCollector: bundle.tcgCollectorPartner,
+            pokemonTcgplayerMarket: bundle.pokemonTcgplayerMarket,
             tcgCollectorVariants:
               bundle.tcgCollectorVariants.length > 0
                 ? bundle.tcgCollectorVariants

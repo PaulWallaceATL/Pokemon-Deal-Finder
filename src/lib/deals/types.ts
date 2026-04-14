@@ -38,8 +38,10 @@ export interface Deal {
     collectr?: number | null;
     /** Raw finder only: Collectr PSA 10 reference (display; not used for deal %). */
     collectrGradedPsa10?: number | null;
-    /** tcgcollector.com primary price used in blend (when token is set). */
+    /** tcgcollector.com primary price used in blend when `TCG_COLLECTOR_ACCESS_TOKEN` is set. */
     tcgCollector?: number | null;
+    /** Raw finder: Pokémon TCG API / TCGPlayer market when TCG Collector partner price is missing. */
+    pokemonTcgplayerMarket?: number | null;
     /** Per-variant prices from TCG Collector (display). */
     tcgCollectorVariants?: { label: string; priceCents: number | null }[];
   };

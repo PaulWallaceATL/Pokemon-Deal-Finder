@@ -2,6 +2,10 @@
  * TCG Collector REST API (https://www.tcgcollector.com/api).
  * Auth: Bearer access token from your account (see API docs / C# SDK config).
  *
+ * Public HTML search pages are behind Cloudflare; server-side scraping is not
+ * reliable here. Without a token, the instant finder uses Pokémon TCG API
+ * prices instead (see `pokemontcg-listing-price.ts`).
+ *
  * Query shapes follow the official OpenAPI / .NET SDK (PascalCase query keys).
  * If search returns empty, confirm parameter names in the live Swagger UI.
  */

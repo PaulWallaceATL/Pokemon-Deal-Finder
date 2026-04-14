@@ -55,6 +55,8 @@ export function DealCard({ deal }: DealCardProps) {
     deal.prices.ebaySoldAvg != null ||
     deal.prices.collectr != null ||
     (deal.prices.tcgCollector != null && deal.prices.tcgCollector > 0) ||
+    (deal.prices.pokemonTcgplayerMarket != null &&
+      deal.prices.pokemonTcgplayerMarket > 0) ||
     (deal.prices.tcgCollectorVariants != null &&
       deal.prices.tcgCollectorVariants.length > 0);
 
@@ -222,6 +224,12 @@ export function DealCard({ deal }: DealCardProps) {
                       <PriceItem
                         label="TCG Collector (blend)"
                         value={deal.prices.tcgCollector}
+                      />
+                    ) : deal.prices.pokemonTcgplayerMarket != null &&
+                      deal.prices.pokemonTcgplayerMarket > 0 ? (
+                      <PriceItem
+                        label="TCGPlayer market (Pokémon TCG API)"
+                        value={deal.prices.pokemonTcgplayerMarket}
                       />
                     ) : null}
                     {deal.prices.collectrGradedPsa10 != null &&
