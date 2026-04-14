@@ -1,6 +1,8 @@
 /**
  * Instant finder market price: Collectr + eBay last-five sold only
  * (equal weight when both exist; single source if one is missing).
+ *
+ * **Living doc:** keep `src/lib/finder/pricing-pipeline-doc.ts` in sync when this changes.
  */
 
 export interface FinderCollectrEbayPrices {

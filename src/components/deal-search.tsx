@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Search, Loader2, TrendingDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -397,7 +398,14 @@ export function DealSearch() {
                     Median of per-listing blends (Collectr when configured, plus
                     eBay last-five sold from that card’s title: number, reverse vs
                     non-reverse, Radiant, etc.). Each deal row uses its own comps;
-                    this headline is only a rough center of the current result set.
+                    this headline is only a rough center of the current result set.{" "}
+                    <Link
+                      href="/pricing-pipeline"
+                      className="font-medium text-foreground underline-offset-2 hover:underline"
+                    >
+                      Pricing pipeline (diagram)
+                    </Link>
+                    .
                   </p>
                 </div>
                 <div className="h-10 w-px bg-border" />

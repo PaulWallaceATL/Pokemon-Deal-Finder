@@ -158,6 +158,7 @@ function buildEffectiveListingQualifier(params: {
   return [base, finishSuffix].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
+/** Fetches sold + Collectr + catalog and blends into one reference. Documented in `src/lib/finder/pricing-pipeline-doc.ts`. */
 async function fetchListingCompBundle(args: {
   listingTitle: string;
   setName: string | undefined;

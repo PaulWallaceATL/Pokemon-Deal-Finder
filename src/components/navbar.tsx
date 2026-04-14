@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Zap, LayoutDashboard, Bookmark, LogOut } from "lucide-react";
+import { Zap, LayoutDashboard, Bookmark, GitBranch, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -61,6 +61,13 @@ export function Navbar() {
             >
               <Bookmark className="mr-1.5 h-4 w-4" />
               Tracked
+            </Link>
+            <Link
+              href="/pricing-pipeline"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              <GitBranch className="mr-1.5 h-4 w-4" />
+              Pricing
             </Link>
           </nav>
         </div>
