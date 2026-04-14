@@ -50,12 +50,13 @@ const mockListings: FbMarketplaceListing[] = [
  */
 export async function searchFacebookMarketplace(
   cardName: string,
-  cardSet?: string
+  cardSet?: string,
+  listingQualifier?: string
 ): Promise<FbMarketplaceListing[]> {
   if (USE_MOCK) {
     return mockListings.map((l) => ({
       ...l,
-      title: `${cardName} ${cardSet ?? ""} - ${l.title}`.trim(),
+      title: `${cardName} ${cardSet ?? ""} ${listingQualifier ?? ""} - ${l.title}`.trim(),
     }));
   }
 
@@ -66,14 +67,19 @@ export async function searchFacebookMarketplace(
     return [];
   }
 
-  return fetchFromApify(cardName, cardSet);
+  return fetchFromApify(cardName, cardSet, listingQualifier);
 }
 
 async function fetchFromApify(
   cardName: string,
-  cardSet: string | undefined
+  cardSet: string | undefined,
+  listingQualifier: string | undefined
 ): Promise<FbMarketplaceListing[]> {
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const query = [cardName, cardSet, listingQualifier]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   try {
     // Run the actor synchronously and get dataset items directly

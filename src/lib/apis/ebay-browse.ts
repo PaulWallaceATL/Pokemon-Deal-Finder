@@ -247,16 +247,21 @@ async function searchViaScrape(
  */
 export async function searchEbayListings(
   cardName: string,
-  cardSet?: string
+  cardSet?: string,
+  listingQualifier?: string
 ): Promise<EbayListing[]> {
   if (USE_MOCK) {
     return mockListings.map((l) => ({
       ...l,
-      title: `${cardName} ${cardSet ?? ""} ${l.condition}`.trim(),
+      title: `${cardName} ${cardSet ?? ""} ${listingQualifier ?? ""} ${l.condition}`.trim(),
     }));
   }
 
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const query = [cardName, cardSet, listingQualifier]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // Prefer the official API (works from cloud servers)
   if (EBAY_APP_ID) {

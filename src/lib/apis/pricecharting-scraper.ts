@@ -29,13 +29,19 @@ function parseDollarsToCents(text: string | undefined): number | null {
  */
 export async function scrapePriceChartingPrices(
   cardName: string,
-  cardSet?: string
+  cardSet?: string,
+  extraSearchTerms?: string
 ): Promise<PriceChartingScrapedResult> {
+  const query = [cardName, cardSet, extraSearchTerms]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
   if (USE_MOCK) {
     return {
       rawPriceCents: 3900,
       gradedPriceCents: 8500,
-      productName: `${cardName}${cardSet ? ` [${cardSet}]` : ""}`,
+      productName: query || cardName,
       productUrl: "https://www.pricecharting.com/game/mock",
     };
   }
@@ -43,18 +49,22 @@ export async function scrapePriceChartingPrices(
   // If API key is available, prefer it over scraping
   const apiKey = process.env.PRICECHARTING_API_KEY;
   if (apiKey) {
-    return fetchFromApi(cardName, cardSet, apiKey);
+    return fetchFromApi(cardName, cardSet, apiKey, extraSearchTerms);
   }
 
-  return scrapeFromWeb(cardName, cardSet);
+  return scrapeFromWeb(cardName, cardSet, extraSearchTerms);
 }
 
 async function fetchFromApi(
   cardName: string,
   cardSet: string | undefined,
-  apiKey: string
+  apiKey: string,
+  extraSearchTerms?: string
 ): Promise<PriceChartingScrapedResult> {
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const query = [cardName, cardSet, extraSearchTerms]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   const url = new URL("https://www.pricecharting.com/api/product");
   url.searchParams.set("t", apiKey);
   url.searchParams.set("q", query);
@@ -75,9 +85,13 @@ async function fetchFromApi(
 
 async function scrapeFromWeb(
   cardName: string,
-  cardSet: string | undefined
+  cardSet: string | undefined,
+  extraSearchTerms?: string
 ): Promise<PriceChartingScrapedResult> {
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const query = [cardName, cardSet, extraSearchTerms]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 
   // Search for the product
   const searchUrl = `https://www.pricecharting.com/search-products?q=${encodeURIComponent(query)}&type=prices`;

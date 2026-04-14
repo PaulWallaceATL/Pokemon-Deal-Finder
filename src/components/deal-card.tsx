@@ -40,6 +40,12 @@ export function DealCard({ deal }: DealCardProps) {
   const linkTarget = isLiveResult ? "_blank" : undefined;
   const linkRel = isLiveResult ? "noopener noreferrer" : undefined;
 
+  const showPriceBreakdown =
+    deal.prices.tcgplayer != null ||
+    deal.prices.pricechartingRaw != null ||
+    deal.prices.pricechartingGraded != null ||
+    deal.prices.ebaySoldAvg != null;
+
   return (
     <Card className="group relative overflow-hidden transition-shadow hover:shadow-lg">
       <CardContent className="flex gap-4 p-4">
@@ -95,6 +101,14 @@ export function DealCard({ deal }: DealCardProps) {
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                   {deal.rarity}
                 </Badge>
+                {deal.ebayLast5AvgCents != null && deal.ebayLast5AvgCents > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-500/40 bg-emerald-500/10 text-[10px] px-1.5 py-0 text-emerald-800 dark:text-emerald-200"
+                  >
+                    Last 5 avg sold: {formatCents(deal.ebayLast5AvgCents)}
+                  </Badge>
+                ) : null}
               </div>
             </div>
             <Badge
@@ -119,20 +133,18 @@ export function DealCard({ deal }: DealCardProps) {
             </span>
           </div>
 
-          {/* Price comparison grid -- only for DB deals, not live search (shown in summary bar) */}
-          {!isLiveResult && (
+          {showPriceBreakdown ? (
             <div className="rounded-md border bg-muted/40 px-3 py-2">
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
                 <PriceItem label="TCGPlayer" value={deal.prices.tcgplayer} />
                 <PriceItem label="PC Raw" value={deal.prices.pricechartingRaw} />
-                <PriceItem label="eBay Sold Avg" value={deal.prices.ebaySoldAvg} />
+                <PriceItem label="eBay last 5 avg" value={deal.prices.ebaySoldAvg} />
                 <PriceItem label="PC Graded" value={deal.prices.pricechartingGraded} />
               </div>
             </div>
-          )}
+          ) : null}
 
-          {/* PSA graded prices + predicted grade -- only for DB deals */}
-          {!isLiveResult && deal.psaPrices && (
+          {deal.psaPrices ? (
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-3 text-xs">
                 <span className="font-semibold text-muted-foreground">PSA Graded:</span>
@@ -160,7 +172,7 @@ export function DealCard({ deal }: DealCardProps) {
                 <PredictedGradeBadge prediction={deal.predictedGrade} />
               )}
             </div>
-          )}
+          ) : null}
 
           <Separator />
 

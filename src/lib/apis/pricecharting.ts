@@ -12,9 +12,14 @@ export interface PriceChartingResult {
  */
 export async function getPriceChartingPrices(
   cardName: string,
-  cardSet?: string
+  cardSet?: string,
+  extraSearchTerms?: string
 ): Promise<PriceChartingResult> {
-  const result = await scrapePriceChartingPrices(cardName, cardSet);
+  const result = await scrapePriceChartingPrices(
+    cardName,
+    cardSet,
+    extraSearchTerms
+  );
   return {
     rawPriceCents: result.rawPriceCents,
     gradedPriceCents: result.gradedPriceCents,

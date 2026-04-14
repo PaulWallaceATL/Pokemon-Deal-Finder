@@ -10,8 +10,11 @@ export interface EbaySoldItem {
 
 export interface EbaySoldResult {
   items: EbaySoldItem[];
+  /** Mean of up to five most recent sold comps (see `SOLD_SAMPLE_SIZE`). */
   averagePriceCents: number;
 }
+
+const SOLD_SAMPLE_SIZE = 5;
 
 const SCRAPE_HEADERS = {
   "User-Agent":
@@ -90,7 +93,7 @@ async function soldViaApi(
     category_ids: "183454",
     filter: "buyingOptions:{FIXED_PRICE}",
     sort: "newlyListed",
-    limit: "10",
+    limit: String(SOLD_SAMPLE_SIZE),
   });
 
   const response = await fetch(
@@ -108,7 +111,7 @@ async function soldViaApi(
   const data = await response.json();
   const apiItems = data.itemSummaries ?? [];
 
-  const items: EbaySoldItem[] = apiItems.slice(0, 10).map(
+  const items: EbaySoldItem[] = apiItems.slice(0, SOLD_SAMPLE_SIZE).map(
     (item: { title: string; price: { value: string } }) => ({
       title: item.title,
       priceCents: Math.round(parseFloat(item.price?.value ?? "0") * 100),
@@ -151,7 +154,7 @@ async function soldViaScrape(
   const items: EbaySoldItem[] = [];
 
   $(".s-item").each((_, el) => {
-    if (items.length >= 10) return false;
+    if (items.length >= SOLD_SAMPLE_SIZE) return false;
 
     const $item = $(el);
     const title = $item.find(".s-item__title span, .s-item__title").first().text().trim();
@@ -191,12 +194,13 @@ async function soldViaScrape(
  */
 export async function getEbaySoldAverage(
   cardName: string,
-  cardSet?: string
+  cardSet?: string,
+  listingQualifier?: string
 ): Promise<EbaySoldResult> {
   if (USE_MOCK) {
-    const items = mockSoldItems.map((i) => ({
+    const items = mockSoldItems.slice(0, SOLD_SAMPLE_SIZE).map((i) => ({
       ...i,
-      title: `${cardName} ${cardSet ?? ""} - ${i.title}`.trim(),
+      title: `${cardName} ${cardSet ?? ""} ${listingQualifier ?? ""} - ${i.title}`.trim(),
     }));
     const avg = Math.round(
       items.reduce((sum, i) => sum + i.priceCents, 0) / items.length
@@ -204,7 +208,11 @@ export async function getEbaySoldAverage(
     return { items, averagePriceCents: avg };
   }
 
-  const query = cardSet ? `${cardName} ${cardSet}` : cardName;
+  const query = [cardName, cardSet, listingQualifier]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // Prefer API
   if (process.env.EBAY_APP_ID) {

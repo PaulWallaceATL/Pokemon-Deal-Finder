@@ -66,23 +66,36 @@ const mockCards: PokemonCard[] = [
   },
 ];
 
-export async function searchCards(query: string): Promise<PokemonCard[]> {
+export async function searchCards(
+  query: string,
+  opts?: { setId?: string }
+): Promise<PokemonCard[]> {
   if (USE_MOCK) {
     const q = query.toLowerCase();
-    return mockCards.filter(
+    let rows = mockCards.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.set.toLowerCase().includes(q) ||
         c.id.toLowerCase().includes(q)
     );
+    if (opts?.setId) {
+      const prefix = `${opts.setId}-`;
+      rows = rows.filter((c) => c.id.startsWith(prefix));
+    }
+    return rows;
   }
 
   const apiKey = process.env.POKEMON_TCG_API_KEY;
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (apiKey) headers["X-Api-Key"] = apiKey;
 
+  const safeName = query.replace(/"/g, "").trim();
+  const lucene = opts?.setId
+    ? `name:"${safeName}" set.id:${opts.setId}`
+    : `name:"${safeName}"`;
+
   const response = await fetch(
-    `https://api.pokemontcg.io/v2/cards?q=name:"${encodeURIComponent(query)}"&pageSize=10&orderBy=-set.releaseDate`,
+    `https://api.pokemontcg.io/v2/cards?q=${encodeURIComponent(lucene)}&pageSize=10&orderBy=-set.releaseDate`,
     { headers }
   );
 
