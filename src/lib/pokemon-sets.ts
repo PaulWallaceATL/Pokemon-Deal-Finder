@@ -5,6 +5,7 @@ export interface PokemonSetEntry {
 }
 
 export const POKEMON_SET_ERAS = [
+  "Mega Evolution",
   "Scarlet & Violet",
   "Sword & Shield",
   "Sun & Moon",
@@ -22,6 +23,11 @@ export const POKEMON_SET_ERAS = [
 ] as const;
 
 export const POKEMON_SETS: PokemonSetEntry[] = [
+  // ============================================================
+  // Mega Evolution Era
+  // ============================================================
+  { value: "me2pt5", label: "Ascended Heroes", era: "Mega Evolution" },
+
   // ============================================================
   // Scarlet & Violet Era
   // ============================================================

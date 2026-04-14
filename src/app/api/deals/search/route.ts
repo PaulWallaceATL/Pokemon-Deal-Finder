@@ -18,6 +18,7 @@ import {
   parseCardFinish,
   titleMatchesFinishFilter,
 } from "@/lib/pokemon/card-finish";
+import { listingTitleMatchesSealedIntent } from "@/lib/pokemon/sealed-listing-gate";
 import {
   buildListingQualifier,
   finderCategoryToProductType,
@@ -139,7 +140,9 @@ export async function GET(request: Request) {
       collectrResult,
       altResult,
     ] = await Promise.allSettled([
-      searchEbayListings(query, setNameForMarket, listingQualifier),
+      searchEbayListings(query, setNameForMarket, listingQualifier, {
+        allowBundleKeyword: category === "sealed",
+      }),
       searchFacebookMarketplace(query, setNameForMarket, listingQualifier),
       getEbaySoldAverage(query, setNameForMarket, listingQualifier),
       getPriceChartingPrices(query, setNameForMarket, priceChartingExtra),
@@ -247,10 +250,17 @@ export async function GET(request: Request) {
       }
     }
 
-    const listingsFiltered =
+    const listingsAfterFinish =
       category === "raw" && finish !== "any"
         ? allListings.filter((l) => titleMatchesFinishFilter(l.title, finish))
         : allListings;
+
+    const listingsFiltered =
+      category === "sealed"
+        ? listingsAfterFinish.filter((l) =>
+            listingTitleMatchesSealedIntent(l.title, sealedKind)
+          )
+        : listingsAfterFinish;
 
     const psaPrices =
       pcGradedPrice != null

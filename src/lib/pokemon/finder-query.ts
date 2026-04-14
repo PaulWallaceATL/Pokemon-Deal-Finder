@@ -36,17 +36,20 @@ export function buildListingQualifier(params: {
     return `${company} ${grade}`.trim();
   }
   const kind = params.sealedKind ?? "any";
+  /** eBay tokens: steer toward product SKUs, away from singles/slabs. */
+  const antiSingle =
+    "-PSA -BGS -CGC -SGC -TAG -graded -slab -single -singles -card only -just the card";
   const byKind: Record<SealedProductKind, string> = {
-    any: "factory sealed",
-    tin: "tin factory sealed",
-    etb: "elite trainer box factory sealed",
-    booster_box: "booster box factory sealed",
-    booster_bundle: "booster bundle factory sealed",
-    booster_pack: "booster pack factory sealed",
-    blister: "blister pack factory sealed",
-    upc: "ultra premium collection factory sealed",
-    case: "case factory sealed pokemon",
-    other: "sealed pokemon tcg",
+    any: `factory sealed pokemon tcg ${antiSingle}`,
+    tin: `tin factory sealed pokemon tcg ${antiSingle}`,
+    etb: `elite trainer box ETB factory sealed pokemon tcg ${antiSingle}`,
+    booster_box: `booster box factory sealed pokemon tcg ${antiSingle}`,
+    booster_bundle: `booster bundle factory sealed pokemon tcg ${antiSingle}`,
+    booster_pack: `booster pack factory sealed pokemon tcg ${antiSingle}`,
+    blister: `blister pack factory sealed pokemon tcg ${antiSingle}`,
+    upc: `ultra premium collection factory sealed pokemon tcg ${antiSingle}`,
+    case: `case factory sealed pokemon tcg ${antiSingle}`,
+    other: `sealed pokemon tcg box ${antiSingle}`,
   };
   return byKind[kind];
 }

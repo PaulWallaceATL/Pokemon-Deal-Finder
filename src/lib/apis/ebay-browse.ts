@@ -99,17 +99,24 @@ async function getEbayOAuthToken(): Promise<string | null> {
   return cachedToken.token;
 }
 
+export interface EbaySearchOptions {
+  /** When true, do not add `-bundle` (needed for sealed booster bundle / ETB-ish queries). */
+  allowBundleKeyword?: boolean;
+}
+
 /**
  * Search eBay via the official Browse API (works reliably from cloud servers).
  */
 async function searchViaApi(
-  query: string
+  query: string,
+  opts?: EbaySearchOptions
 ): Promise<EbayListing[]> {
   const token = await getEbayOAuthToken();
   if (!token) return [];
 
+  const bundleNeg = opts?.allowBundleKeyword ? "" : " -bundle";
   // Exclude digital codes, lots, and accessories from results
-  const refinedQuery = `${query} -code -online -digital -lot -bundle -custom -proxy -repack`;
+  const refinedQuery = `${query} -code -online -digital -lot${bundleNeg} -custom -proxy -repack`;
 
   const params = new URLSearchParams({
     q: refinedQuery,
@@ -248,7 +255,8 @@ async function searchViaScrape(
 export async function searchEbayListings(
   cardName: string,
   cardSet?: string,
-  listingQualifier?: string
+  listingQualifier?: string,
+  options?: EbaySearchOptions
 ): Promise<EbayListing[]> {
   if (USE_MOCK) {
     return mockListings.map((l) => ({
@@ -266,7 +274,7 @@ export async function searchEbayListings(
   // Prefer the official API (works from cloud servers)
   if (EBAY_APP_ID) {
     try {
-      const results = await searchViaApi(query);
+      const results = await searchViaApi(query, options);
       if (results.length > 0) return results;
     } catch (err) {
       console.warn("eBay API search failed, trying scrape:", err);
