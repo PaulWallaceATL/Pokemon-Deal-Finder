@@ -3,6 +3,8 @@
  * so marketplace queries and result filtering line up with the intended card.
  */
 
+import { REVERSE_HOLO_TITLE_RE } from "@/lib/listing/listing-comp-query";
+
 export type CardFinishFilter =
   | "any"
   | "non_holo"
@@ -59,9 +61,7 @@ export function titleMatchesFinishFilter(
   if (finish === "any") return true;
 
   const isReverse =
-    /\breverse\s*holo|\brev\.?\s*holo|\br\/h\b|\brh\b|\brev\s+holo/i.test(
-      title
-    );
+    REVERSE_HOLO_TITLE_RE.test(title) || /\brev\s+holo/i.test(title);
   const isAlt = /\balt(?:ernate)?\s*art|\baa\b/i.test(title);
   const isFullArt = /\bfull\s*art|\bfa\b/i.test(title);
   const isTg = /\btrainer\s*gallery|\btg\s*0?\d|\bgallery\b/i.test(title);

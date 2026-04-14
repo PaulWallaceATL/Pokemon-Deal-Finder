@@ -11,6 +11,10 @@
  */
 
 import type { FinderListingCategory } from "@/lib/pokemon/finder-query";
+import {
+  inferListingPrintKind,
+  type ListingPrintKind,
+} from "@/lib/listing/listing-comp-query";
 
 const DEFAULT_BASE = "https://www.tcgcollector.com/api";
 
@@ -36,12 +40,24 @@ function bearer(): string | null {
   return t || null;
 }
 
-/** Use listing text before slab keywords so CardSearch matches catalog rows. */
+/**
+ * Use text before slab keywords for the card name, but keep PSA label print
+ * words from the **full** title (e.g. “Reverse Holofoil” after `PSA 10`).
+ */
 function listingTitleForTcgSearch(title: string): string {
   const t = title.normalize("NFKC").trim();
   const idx = t.search(/\b(PSA|BGS|CGC|SGC|TAG)\b/i);
   const head = idx > 0 ? t.slice(0, idx) : t;
-  return head.replace(/\s+/g, " ").trim();
+  const pk = inferListingPrintKind(t);
+  const hint =
+    pk === "reverse_holo"
+      ? "Reverse Holofoil"
+      : pk === "holo"
+        ? "Holofoil"
+        : pk === "non_holo"
+          ? "Non Holo"
+          : "";
+  return [head, hint].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
 function authHeaders(token: string): HeadersInit {
@@ -243,29 +259,59 @@ function medianPositive(values: number[]): number | null {
   return v.length % 2 === 1 ? v[mid]! : Math.round((v[mid - 1]! + v[mid]!) / 2);
 }
 
+function variantLabelMatchesPrintKind(
+  variantLabel: string,
+  kind: ListingPrintKind
+): boolean {
+  const L = variantLabel.toLowerCase();
+  const rev = /reverse|r\/h|\brh\b/.test(L);
+  const hol =
+    /\bholo(?:foil)?\b|\bfoil\b/.test(L) && !rev;
+  if (kind === "reverse_holo") return rev;
+  if (kind === "holo") return hol || (/\bholo/i.test(L) && !rev);
+  if (kind === "non_holo") return !rev && !/\bholo(?:foil)?\b/i.test(L);
+  return true;
+}
+
 function pickPrimaryPriceCents(
   variants: TcgCollectorVariantRow[],
-  category: FinderListingCategory
+  category: FinderListingCategory,
+  listingTitle?: string
 ): number | null {
   const priced = variants.filter((r) => r.priceCents && r.priceCents > 0);
   if (priced.length === 0) return null;
+
+  const kind =
+    listingTitle && listingTitle.trim()
+      ? inferListingPrintKind(listingTitle)
+      : "unknown";
+
+  const narrow = (pool: TcgCollectorVariantRow[]): TcgCollectorVariantRow[] => {
+    if (kind === "unknown" || pool.length === 0) return pool;
+    const m = pool.filter((r) =>
+      variantLabelMatchesPrintKind(r.variantLabel, kind)
+    );
+    return m.length ? m : pool;
+  };
 
   if (category === "raw") {
     const nonSlab = priced.filter(
       (r) => !/\b(psa|bgs|cgc|sgc|tag|slab|graded)\b/i.test(r.variantLabel)
     );
     const pool = nonSlab.length ? nonSlab : priced;
-    return Math.min(...pool.map((r) => r.priceCents!));
+    const use = narrow(pool);
+    return Math.min(...use.map((r) => r.priceCents!));
   }
   if (category === "graded") {
     const slab = priced.filter((r) =>
       /\b(psa|bgs|cgc|sgc|tag)\b/i.test(r.variantLabel)
     );
     const pool = slab.length ? slab : priced;
-    const cents = pool.map((r) => r.priceCents!);
+    const use = narrow(pool);
+    const cents = use.map((r) => r.priceCents!);
     return medianPositive(cents);
   }
-  const cents = priced.map((r) => r.priceCents!);
+  const cents = narrow(priced).map((r) => r.priceCents!);
   return medianPositive(cents);
 }
 
@@ -354,7 +400,11 @@ export async function getTcgCollectorListingMatch(opts: {
     variants = extractVariants(best);
   }
 
-  const primaryPriceCents = pickPrimaryPriceCents(variants, opts.category);
+  const primaryPriceCents = pickPrimaryPriceCents(
+    variants,
+    opts.category,
+    opts.ebayListingTitle
+  );
 
   return {
     cardId: id,

@@ -35,6 +35,7 @@ import {
 import {
   compKeyForListing,
   parseListingCompFromTitle,
+  soldTitleCompatibleWithListingPrintKind,
   variantSoldQualifier,
 } from "@/lib/listing/listing-comp-query";
 
@@ -195,7 +196,9 @@ async function fetchListingCompBundle(args: {
   const variantHints =
     [
       parsed.isRadiant ? "radiant" : "",
-      parsed.isReverseHolo ? "reverse holo" : "",
+      parsed.printKind === "reverse_holo" ? "reverse holofoil" : "",
+      parsed.printKind === "holo" ? "holofoil" : "",
+      parsed.printKind === "non_holo" ? "non holo" : "",
     ]
       .filter(Boolean)
       .join(", ") || undefined;
@@ -221,7 +224,8 @@ async function fetchListingCompBundle(args: {
     args.category === "graded" && collectrGrader && collectrGradeStr
       ? (t: string) =>
           args.soldTitleFilter(t) &&
-          soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr)
+          soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr) &&
+          soldTitleCompatibleWithListingPrintKind(parsed.printKind, t)
       : args.soldTitleFilter;
 
   const usePokemonCatalog =

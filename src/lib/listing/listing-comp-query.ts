@@ -11,6 +11,74 @@ import { extractSlabFromTitle } from "@/lib/listing/slab-reference-price";
 
 const KNOWN_GRADERS = new Set(["PSA", "BGS", "CGC", "SGC", "TAG"]);
 
+/**
+ * Print line on PSA labels / eBay titles. Inferred from the **full** title
+ * (variant text often appears after `PSA 10` on slabs).
+ */
+export type ListingPrintKind =
+  | "reverse_holo"
+  | "holo"
+  | "non_holo"
+  | "unknown";
+
+/** “Reverse Holofoil” is one token on slabs — allow `holo` + optional `foil`. */
+export const REVERSE_HOLO_TITLE_RE =
+  /\breverse\s+holo(?:foil)?\b|\brev\.?\s+holo(?:foil)?\b|\br\/h\b|\brh\b/i;
+
+export const NON_HOLO_TITLE_RE = /\bnon[-\s]?holo(?:foil)?\b/i;
+
+export const REGULAR_HOLO_TITLE_RE =
+  /\bregular\s+holo(?:foil)?\b|\bholofoil\b|\bholo\s+rare\b/i;
+
+export function inferListingPrintKind(title: string): ListingPrintKind {
+  const raw = title.normalize("NFKC");
+  if (NON_HOLO_TITLE_RE.test(raw)) return "non_holo";
+  if (REVERSE_HOLO_TITLE_RE.test(raw)) return "reverse_holo";
+  if (REGULAR_HOLO_TITLE_RE.test(raw)) return "holo";
+  if (/\bholo\b/i.test(raw) && !/\breverse\b/i.test(raw)) return "holo";
+  return "unknown";
+}
+
+/**
+ * eBay titles often mirror the slab: set + name before `PSA 10`, then
+ * “Reverse Holofoil” after the grade. Used to widen TCG Collector search.
+ */
+export function slabTailAfterGrade(title: string): string {
+  const t = title.normalize("NFKC").replace(/\s+/g, " ");
+  const m = t.match(
+    /\b(PSA|BGS|BG|CGC|SGC|TAG)\s*(?:#|Grade\s*)?\s*(\d+(?:\.\d+)?)\b/i
+  );
+  if (!m || m.index === undefined) return "";
+  return t.slice(m.index + m[0].length).trim().slice(0, 160);
+}
+
+/**
+ * For graded sold comps: when the listing print is explicit, drop sold rows
+ * that clearly disagree (e.g. reverse slab priced vs regular-holo sales).
+ */
+export function soldTitleCompatibleWithListingPrintKind(
+  listingPrintKind: ListingPrintKind,
+  soldTitle: string
+): boolean {
+  if (listingPrintKind === "unknown") return true;
+  const t = soldTitle.normalize("NFKC");
+  const soldReverse = REVERSE_HOLO_TITLE_RE.test(t);
+  if (listingPrintKind === "reverse_holo") {
+    return soldReverse;
+  }
+  if (listingPrintKind === "holo") {
+    return !soldReverse;
+  }
+  if (listingPrintKind === "non_holo") {
+    return (
+      !soldReverse &&
+      !REGULAR_HOLO_TITLE_RE.test(t) &&
+      !/\bholo(?:foil)?\b/i.test(t)
+    );
+  }
+  return true;
+}
+
 export interface ParsedListingComp {
   /**
    * Card line for eBay sold search (name + collector #, no set — set is passed
@@ -23,6 +91,7 @@ export interface ParsedListingComp {
   catalogNumber?: string;
   isReverseHolo: boolean;
   isRadiant: boolean;
+  printKind: ListingPrintKind;
 }
 
 function stripBoilerplate(s: string): string {
@@ -42,8 +111,8 @@ export function parseListingCompFromTitle(
   setName?: string
 ): ParsedListingComp {
   const raw = title.normalize("NFKC");
-  const isReverseHolo =
-    /\breverse\s*holo|\brev\.?\s*holo|\br\/h\b/i.test(raw);
+  const printKind = inferListingPrintKind(raw);
+  const isReverseHolo = printKind === "reverse_holo";
   const isRadiant = /\bradiant\b/i.test(raw);
 
   const numMatch = raw.match(
@@ -88,6 +157,7 @@ export function parseListingCompFromTitle(
     catalogNumber,
     isReverseHolo,
     isRadiant,
+    printKind,
   };
 }
 
@@ -95,10 +165,16 @@ export function parseListingCompFromTitle(
  * Extra tokens so reverse and non-reverse do not share the same sold pool.
  */
 export function variantSoldQualifier(parsed: ParsedListingComp): string {
-  if (parsed.isReverseHolo) {
-    return '"reverse holo"';
+  if (parsed.printKind === "reverse_holo") {
+    return '"reverse holofoil"';
   }
-  return '-reverse -rev -"reverse holo"';
+  if (parsed.printKind === "holo") {
+    return 'holo -reverse -rev -"reverse holo" -"reverse holofoil"';
+  }
+  if (parsed.printKind === "non_holo") {
+    return '-holofoil -"reverse holo" -"reverse holofoil" -reverse -rev';
+  }
+  return '-reverse -rev -"reverse holo" -"reverse holofoil"';
 }
 
 /** Stable key for deduping network fetches. */
@@ -123,7 +199,7 @@ export function compKeyForListing(
   return [
     p.ebayCardQuery.toLowerCase(),
     p.catalogNumber?.toLowerCase() ?? "",
-    p.isReverseHolo ? "rh" : "nrh",
+    p.printKind,
     p.isRadiant ? "rad" : "",
     category,
     grader,
