@@ -378,7 +378,7 @@ export function DealSearch() {
               <div className="flex flex-wrap items-center gap-4">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">
-                    Blended market (search)
+                    Blended market (median of listings)
                   </p>
                   <p className="text-2xl font-bold">
                     {results.blendedPriceCents > 0
@@ -386,18 +386,19 @@ export function DealSearch() {
                       : "N/A"}
                   </p>
                   <p className="mt-1 max-w-md text-[11px] text-muted-foreground">
-                    Blend of Collectr (when configured) and eBay last-five sold
-                    (English listings, sellers with feedback). Graded % off uses
-                    the slab in the title vs that blend.
+                    Median of per-listing blends (Collectr when configured, plus
+                    eBay last-five sold from that card’s title: number, reverse vs
+                    non-reverse, Radiant, etc.). Each deal row uses its own comps;
+                    this headline is only a rough center of the current result set.
                   </p>
                 </div>
                 <div className="h-10 w-px bg-border" />
                 <PricePill
-                  label="Collectr (collectr.com)"
+                  label="Collectr median (collectr.com)"
                   value={results.marketPrices.collectr}
                 />
                 <PricePill
-                  label="eBay last 5 sold"
+                  label="eBay last-5 median"
                   value={results.marketPrices.ebay_sold_avg}
                 />
                 <div className="ml-auto flex flex-col items-end gap-1 text-sm text-muted-foreground">

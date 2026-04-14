@@ -1,7 +1,8 @@
 /**
  * Collectr (collectr.com) pricing for the finder: set `COLLECTR_MARKET_API_URL`
  * to an HTTPS endpoint that accepts POST JSON
- * `{ cardName, setName?, category, grader?, grade? }` and returns `{ priceCents: number }`
+ * `{ cardName, setName?, category, grader?, grade?, cardNumber?, listingTitle?, variantHints? }`
+ * and returns `{ priceCents: number }`
  * (English / US market price your bridge resolves from Collectr).
  */
 
@@ -38,6 +39,12 @@ export async function getCollectrMarketPriceCents(context: {
   category: string;
   grader?: string;
   grade?: string;
+  /** e.g. GG63, 105/159 — helps the bridge pick the right printing. */
+  cardNumber?: string;
+  /** Original marketplace title for disambiguation. */
+  listingTitle?: string;
+  /** e.g. "radiant, reverse holo" */
+  variantHints?: string;
 }): Promise<number | null> {
   const url = process.env.COLLECTR_MARKET_API_URL;
   const key = process.env.COLLECTR_MARKET_API_KEY;

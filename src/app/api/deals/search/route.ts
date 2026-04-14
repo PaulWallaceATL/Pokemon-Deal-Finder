@@ -23,6 +23,11 @@ import {
   type GradingCompany,
   type SealedProductKind,
 } from "@/lib/pokemon/finder-query";
+import {
+  compKeyForListing,
+  parseListingCompFromTitle,
+  variantSoldQualifier,
+} from "@/lib/listing/listing-comp-query";
 
 export const maxDuration = 60;
 
@@ -57,8 +62,103 @@ function parseSealedKind(v: string | null): SealedProductKind {
   return SEALED_KINDS.includes(x) ? x : "any";
 }
 
+const MAX_UNIQUE_COMP_KEYS = 26;
+const COMP_FETCH_CONCURRENCY = 5;
+
 const MARKET_SKEW_NOTE =
-  "Market value uses Collectr (when COLLECTR_MARKET_API_URL is set) and eBay last-five English sold comps; Japanese import titles are filtered out so English PSA comps are not mixed with JP. Many cards share the same name across sets—use the set filter. See .env.local.example for a Collectr bridge.";
+  "Each row uses Collectr (when COLLECTR_MARKET_API_URL is set) and eBay last-five English sold comps keyed off that listing’s title (collector number, reverse vs non-reverse, Radiant, etc.). The summary row shows medians across the current result set, not one price for every card. Japanese import titles are filtered out. See .env.local.example for a Collectr bridge.";
+
+function medianPositiveCents(values: number[]): number | null {
+  const v = values
+    .filter((x) => Number.isFinite(x) && x > 0)
+    .sort((a, b) => a - b);
+  if (v.length === 0) return null;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 === 1
+    ? v[mid]!
+    : Math.round((v[mid - 1]! + v[mid]!) / 2);
+}
+
+type CompBundle = {
+  ebaySoldAvg: number | null;
+  collectr: number | null;
+  blendedPriceCents: number;
+  sampleSize: number;
+};
+
+async function fetchListingCompBundle(args: {
+  listingTitle: string;
+  setName: string | undefined;
+  category: FinderListingCategory;
+  grader: GradingCompany;
+  grade: string;
+  listingQualifier: string;
+  englishComp: (title: string) => boolean;
+}): Promise<CompBundle> {
+  const isSealed = args.category === "sealed";
+  const parsed = parseListingCompFromTitle(args.listingTitle, args.setName);
+  const combinedQualifier = [args.listingQualifier, variantSoldQualifier(parsed)]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const cardLine = isSealed
+    ? args.listingTitle.slice(0, 120)
+    : parsed.ebayCardQuery;
+  const collectrName = isSealed
+    ? args.listingTitle.slice(0, 160)
+    : parsed.collectrCardName || cardLine;
+
+  const [soldRes, collectrCent] = await Promise.all([
+    getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
+      titleFilter: args.englishComp,
+    }),
+    getCollectrMarketPriceCents({
+      cardName: collectrName,
+      setName: args.setName,
+      category: args.category,
+      grader: args.category === "graded" ? args.grader : undefined,
+      grade: args.category === "graded" ? args.grade : undefined,
+      cardNumber: isSealed ? undefined : parsed.catalogNumber,
+      listingTitle: args.listingTitle,
+      variantHints:
+        [
+          parsed.isRadiant ? "radiant" : "",
+          parsed.isReverseHolo ? "reverse holo" : "",
+        ]
+          .filter(Boolean)
+          .join(", ") || undefined,
+    }),
+  ]);
+
+  const ebayAvg =
+    soldRes.averagePriceCents > 0 ? soldRes.averagePriceCents : null;
+  const blend = calculateCollectrEbayBlend({
+    collectr: collectrCent,
+    ebay_sold_avg: ebayAvg,
+  });
+
+  return {
+    ebaySoldAvg: ebayAvg,
+    collectr: collectrCent,
+    blendedPriceCents: blend.blendedPriceCents,
+    sampleSize: soldRes.items.length,
+  };
+}
+
+async function mapInChunks<T, R>(
+  items: T[],
+  chunkSize: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    out.push(...(await Promise.all(chunk.map(fn))));
+  }
+  return out;
+}
 
 /**
  * Instant deal search -- scrapes eBay, fetches market prices from all sources,
@@ -109,69 +209,23 @@ export async function GET(request: Request) {
     category === "sealed" ? sealedKind : undefined
   );
 
-  const marketContext = {
-    cardName: query,
-    setName: setNameForMarket,
-    category,
-    grader: category === "graded" ? grader : undefined,
-    grade: category === "graded" ? grade : undefined,
-  };
-
   try {
     const tcgSearchOpts =
       setId && setId !== "all" ? { setId } : undefined;
 
     const englishComp = (title: string) => !titleLooksJapaneseImport(title);
 
-    const [ebayResult, fbResult, ebaySoldResult, tcgResult, collectrResult] =
-      await Promise.allSettled([
-        searchEbayListings(query, setNameForMarket, listingQualifier, {
-          allowBundleKeyword: category === "sealed",
-        }),
-        searchFacebookMarketplace(query, setNameForMarket, listingQualifier),
-        getEbaySoldAverage(query, setNameForMarket, listingQualifier, {
-          titleFilter: englishComp,
-        }),
-        searchCards(query, tcgSearchOpts),
-        getCollectrMarketPriceCents(marketContext),
-      ]);
+    const [ebayResult, fbResult, tcgResult] = await Promise.allSettled([
+      searchEbayListings(query, setNameForMarket, listingQualifier, {
+        allowBundleKeyword: category === "sealed",
+      }),
+      searchFacebookMarketplace(query, setNameForMarket, listingQualifier),
+      searchCards(query, tcgSearchOpts),
+    ]);
 
     const tcgCards =
       tcgResult.status === "fulfilled" ? tcgResult.value : [];
     const tcgCard = tcgCards[0] ?? null;
-
-    const ebaySoldAvg =
-      ebaySoldResult.status === "fulfilled"
-        ? ebaySoldResult.value.averagePriceCents || null
-        : null;
-
-    const collectrPrice =
-      collectrResult.status === "fulfilled" ? collectrResult.value : null;
-
-    const marketPrices = {
-      collectr: collectrPrice,
-      ebay_sold_avg: ebaySoldAvg,
-    };
-
-    const blended = calculateCollectrEbayBlend({
-      collectr: collectrPrice,
-      ebay_sold_avg: ebaySoldAvg,
-    });
-
-    if (blended.blendedPriceCents === 0) {
-      return NextResponse.json({
-        deals: [],
-        marketPrices,
-        blendedPriceCents: 0,
-        totalListings: 0,
-        category,
-        listingQualifier,
-        finish: category === "raw" ? finish : undefined,
-        disclaimer: MARKET_SKEW_NOTE,
-        message:
-          "No market price data: configure COLLECTR_MARKET_API_URL for Collectr, and ensure eBay sold comps return (English-only, sellers with feedback).",
-      });
-    }
 
     interface RawListing {
       id: string;
@@ -232,17 +286,143 @@ export async function GET(request: Request) {
       (l) => !titleLooksJapaneseImport(l.title)
     );
 
+    if (listingsFiltered.length === 0) {
+      return NextResponse.json({
+        deals: [],
+        marketPrices: { collectr: null, ebay_sold_avg: null },
+        blendedPriceCents: 0,
+        totalListings: 0,
+        category,
+        listingQualifier,
+        finish: category === "raw" ? finish : undefined,
+        sealedKind: category === "sealed" ? sealedKind : undefined,
+        grader: category === "graded" ? grader : undefined,
+        grade: category === "graded" ? grade : undefined,
+        disclaimer: MARKET_SKEW_NOTE,
+        message: "No listings matched your filters.",
+        cardInfo: tcgCard
+          ? {
+              name: tcgCard.name,
+              set: tcgCard.set,
+              number: tcgCard.number,
+              rarity: tcgCard.rarity,
+              image: tcgCard.imageLarge || tcgCard.imageSmall,
+            }
+          : null,
+      });
+    }
+
+    const genericBundle = await fetchListingCompBundle({
+      listingTitle: query,
+      setName: setNameForMarket,
+      category,
+      grader,
+      grade,
+      listingQualifier,
+      englishComp,
+    });
+
+    const freq = new Map<string, number>();
+    const keyToExampleTitle = new Map<string, string>();
+    for (const l of listingsFiltered) {
+      const k = compKeyForListing(
+        l.title,
+        setNameForMarket,
+        category,
+        grader,
+        grade
+      );
+      freq.set(k, (freq.get(k) ?? 0) + 1);
+      if (!keyToExampleTitle.has(k)) keyToExampleTitle.set(k, l.title);
+    }
+
+    const sortedKeys = [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([k]) => k);
+    const keysToFetch = sortedKeys.slice(0, MAX_UNIQUE_COMP_KEYS);
+
+    const keyedBundles = await mapInChunks(
+      keysToFetch,
+      COMP_FETCH_CONCURRENCY,
+      async (k) => {
+        const title = keyToExampleTitle.get(k)!;
+        const b = await fetchListingCompBundle({
+          listingTitle: title,
+          setName: setNameForMarket,
+          category,
+          grader,
+          grade,
+          listingQualifier,
+          englishComp,
+        });
+        return { k, b };
+      }
+    );
+
+    const bundleByKey = new Map<string, CompBundle>();
+    for (const { k, b } of keyedBundles) bundleByKey.set(k, b);
+
+    const resolveBundle = (title: string): CompBundle => {
+      const k = compKeyForListing(
+        title,
+        setNameForMarket,
+        category,
+        grader,
+        grade
+      );
+      return bundleByKey.get(k) ?? genericBundle;
+    };
+
+    const perListingBundles = listingsFiltered.map((l) =>
+      resolveBundle(l.title)
+    );
+    const blendsForHeader = perListingBundles
+      .map((b) => b.blendedPriceCents)
+      .filter((c) => c > 0);
+    const headerBlendedCents =
+      medianPositiveCents(blendsForHeader) ??
+      (genericBundle.blendedPriceCents > 0
+        ? genericBundle.blendedPriceCents
+        : 0);
+
+    const marketPrices = {
+      collectr: medianPositiveCents(
+        perListingBundles
+          .map((b) => b.collectr)
+          .filter((c): c is number => c != null && c > 0)
+      ),
+      ebay_sold_avg: medianPositiveCents(
+        perListingBundles
+          .map((b) => b.ebaySoldAvg)
+          .filter((c): c is number => c != null && c > 0)
+      ),
+    };
+
+    let maxSoldSample = genericBundle.sampleSize;
+    for (const b of bundleByKey.values()) {
+      maxSoldSample = Math.max(maxSoldSample, b.sampleSize);
+    }
+
     const deals: Deal[] = listingsFiltered
       .map((listing): Deal | null => {
+        const bundle = resolveBundle(listing.title);
+        maxSoldSample = Math.max(maxSoldSample, bundle.sampleSize);
+
+        const parsed = parseListingCompFromTitle(
+          listing.title,
+          setNameForMarket
+        );
+
         const { referenceCents, note } = listingMarketReferenceCents({
           listingTitle: listing.title,
           category,
-          blendedDefault: blended.blendedPriceCents,
+          blendedDefault: bundle.blendedPriceCents,
           filterGrader: grader,
           filterGrade: grade,
-          gradedAnchorCents: blended.blendedPriceCents,
+          gradedAnchorCents: bundle.blendedPriceCents,
         });
 
+        if (bundle.blendedPriceCents <= 0) return null;
         if (referenceCents <= 0) return null;
 
         if (!listingAtOrBelowReference(listing.priceCents, referenceCents)) {
@@ -257,7 +437,7 @@ export async function GET(request: Request) {
           cardName: listing.title,
           cardSet: tcgCard?.set ?? setNameForMarket ?? "",
           cardSeries: "",
-          cardNumber: tcgCard?.number ?? "",
+          cardNumber: parsed.catalogNumber ?? tcgCard?.number ?? "",
           rarity: tcgCard?.rarity ?? "",
           pokemonTcgId: tcgCard?.id ?? "",
           imageUrl:
@@ -282,12 +462,12 @@ export async function GET(request: Request) {
             tcgplayer: null,
             pricechartingRaw: null,
             pricechartingGraded: null,
-            ebaySoldAvg: ebaySoldAvg,
-            collectr: collectrPrice,
+            ebaySoldAvg: bundle.ebaySoldAvg,
+            collectr: bundle.collectr,
           },
           psaPrices: null,
           predictedGrade: null,
-          ebayLast5AvgCents: ebaySoldAvg,
+          ebayLast5AvgCents: bundle.ebaySoldAvg,
           listingReferenceNote: note,
         };
       })
@@ -297,7 +477,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       deals,
       marketPrices,
-      blendedPriceCents: blended.blendedPriceCents,
+      blendedPriceCents: headerBlendedCents,
       totalListings: listingsFiltered.length,
       cardInfo: tcgCard
         ? {
@@ -315,10 +495,11 @@ export async function GET(request: Request) {
       grader: category === "graded" ? grader : undefined,
       grade: category === "graded" ? grade : undefined,
       disclaimer: MARKET_SKEW_NOTE,
-      ebaySoldSampleSize:
-        ebaySoldResult.status === "fulfilled"
-          ? ebaySoldResult.value.items.length
-          : 0,
+      ebaySoldSampleSize: maxSoldSample,
+      message:
+        deals.length === 0 && listingsFiltered.length > 0
+          ? "No listings were priced below the per-card market estimate (Collectr + eBay sold comps). Try a narrower search or check COLLECTR_MARKET_API_URL / eBay sold data."
+          : undefined,
     });
   } catch (error) {
     console.error("Deal search error:", error);
