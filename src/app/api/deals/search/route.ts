@@ -240,6 +240,7 @@ async function fetchListingCompBundle(args: {
       : Promise.resolve(null),
     getTcgCollectorListingMatch({
       cardName: collectrName,
+      ebayListingTitle: args.listingTitle,
       setName: args.setName,
       catalogNumber: isSealed ? undefined : parsed.catalogNumber,
       category: args.category,
@@ -444,8 +445,11 @@ export async function GET(request: Request) {
       });
     }
 
+    const genericListingTitle =
+      listingsFiltered[0]?.title?.trim() || query;
+
     const genericBundle = await fetchListingCompBundle({
-      listingTitle: query,
+      listingTitle: genericListingTitle,
       setName: setNameForMarket,
       category,
       defaultGrader: grader,
@@ -643,7 +647,7 @@ export async function GET(request: Request) {
       ebaySoldSampleSize: maxSoldSample,
       message:
         deals.length === 0 && listingsFiltered.length > 0
-          ? "No listings were priced below the per-card market estimate (Collectr + eBay sold comps). Try a narrower search or check COLLECTR_MARKET_API_URL / eBay sold data."
+          ? "No deals: every listing’s market guide was missing or above list price. On Vercel, eBay sold HTML often returns 0 comps — set TCG_COLLECTOR_ACCESS_TOKEN (per-listing catalog prices) and/or COLLECTR_MARKET_API_URL, or EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=true for a degraded eBay Browse fallback on raw."
           : undefined,
     });
   } catch (error) {

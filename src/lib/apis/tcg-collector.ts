@@ -32,6 +32,14 @@ function bearer(): string | null {
   return t || null;
 }
 
+/** Use listing text before slab keywords so CardSearch matches catalog rows. */
+function listingTitleForTcgSearch(title: string): string {
+  const t = title.normalize("NFKC").trim();
+  const idx = t.search(/\b(PSA|BGS|CGC|SGC|TAG)\b/i);
+  const head = idx > 0 ? t.slice(0, idx) : t;
+  return head.replace(/\s+/g, " ").trim();
+}
+
 function authHeaders(token: string): HeadersInit {
   return {
     Accept: "application/json",
@@ -285,17 +293,27 @@ async function fetchJson(
  * Search + optional card detail; returns variant rows and a primary price for the finder blend.
  */
 export async function getTcgCollectorListingMatch(opts: {
+  /** Parsed short name for scoring best match. */
   cardName: string;
+  /**
+   * Full eBay (or marketplace) listing title — preferred for `CardSearch`
+   * after slab trim so we only hit TCG Collector for cards we already surfaced.
+   */
+  ebayListingTitle?: string;
   setName?: string;
   catalogNumber?: string;
   category: FinderListingCategory;
 }): Promise<TcgCollectorListingMatch | null> {
   if (!bearer()) return null;
 
-  const parts = [opts.cardName];
-  if (opts.catalogNumber) parts.push(opts.catalogNumber);
-  if (opts.setName) parts.push(opts.setName);
+  const fromListing = opts.ebayListingTitle
+    ? listingTitleForTcgSearch(opts.ebayListingTitle)
+    : "";
+  const parts = fromListing
+    ? [fromListing]
+    : [opts.cardName, opts.catalogNumber, opts.setName].filter(Boolean);
   const cardSearch = parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 220);
+  if (cardSearch.length < 2) return null;
 
   const qs = new URLSearchParams();
   qs.set("CardSearch", cardSearch);

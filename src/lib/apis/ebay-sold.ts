@@ -240,11 +240,24 @@ export async function getEbaySoldAverage(
 
   if (options?.scrapeOnly) {
     try {
-      return await soldViaScrape(query, options);
+      const scraped = await soldViaScrape(query, options);
+      if (scraped.items.length > 0) return scraped;
     } catch (err) {
       console.warn("eBay sold scrape-only (raw) failed:", err);
-      return { items: [], averagePriceCents: 0 };
     }
+    /** Vercel / serverless often cannot scrape eBay sold HTML; optional degraded fallback. */
+    if (
+      process.env.EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK === "true" &&
+      process.env.EBAY_APP_ID
+    ) {
+      try {
+        const api = await soldViaApi(query, options);
+        if (api.items.length > 0) return api;
+      } catch (err) {
+        console.warn("eBay sold Browse fallback (raw) failed:", err);
+      }
+    }
+    return { items: [], averagePriceCents: 0 };
   }
 
   /**
