@@ -4,15 +4,41 @@
  */
 export function titleLooksLikeGradedOrSlab(title: string): boolean {
   const t = title.normalize("NFKC");
-  if (/\b(PSA|BGS|BG|CGC|SGC|TAG)\s*(?:#|Grade\s*)?\s*\d/i.test(t)) {
+  // Slab grades only (avoid "PSA" next to collector numbers like 284/217).
+  const slabGradeAfter = String.raw`(?:10|9\.5|9|8\.5|8|7|6|5|4|3|2|1)`;
+  if (
+    new RegExp(
+      String.raw`\b(PSA|BGS|BG|CGC|SGC|TAG)\s*(?:#|Grade\s*)?\s*${slabGradeAfter}\b`,
+      "i"
+    ).test(t)
+  ) {
     return true;
   }
+  // "PSA GEM MINT 10" — words between company and the grade digit
+  if (/\b(PSA|BGS|CGC|SGC|TAG)\b/i.test(t)) {
+    const idx = t.search(/\b(PSA|BGS|CGC|SGC|TAG)\b/i);
+    if (idx >= 0) {
+      const tail = t.slice(idx, idx + 90);
+      if (/\b(10|9\.5|9|8|7|6|5)\b/.test(tail)) {
+        if (
+          /\b(gem\s*mint|gem\s*mt|gemmint|slab|grade|black\s*label|pristine)\b/i.test(
+            tail
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
   if (
-    /\b(slabs?|gem\s*mint|black\s*label|bgs\s*10|pristine)\b/i.test(t)
+    /\b(slabs?|slabbed|encapsulated|gem\s*mint|gem\s*mt|gemmint|black\s*label|bgs\s*10|pristine)\b/i.test(
+      t
+    )
   ) {
     return true;
   }
   if (/\bgraded\s+card\b/i.test(t)) return true;
+  if (/\b(pre[- ]?graded|already\s+graded|from\s+psa)\b/i.test(t)) return true;
   return false;
 }
 

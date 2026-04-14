@@ -28,7 +28,7 @@ export function buildListingQualifier(params: {
   grade?: string;
 }): string {
   if (params.category === "raw") {
-    return "-PSA -BGS -CGC -SGC -TAG -slab -graded -repack -custom";
+    return "-PSA -BGS -CGC -SGC -TAG -slab -graded -GEM -GEMMT -repack -custom -authentic -encapsulated";
   }
   if (params.category === "graded") {
     const company = params.grader ?? "PSA";

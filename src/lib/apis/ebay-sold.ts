@@ -231,14 +231,37 @@ export async function getEbaySoldAverage(
     .replace(/\s+/g, " ")
     .trim();
 
+  /**
+   * Completed sales: the sold HTML search (LH_Sold=1) is the reliable source.
+   * Browse API `item_summary/search` is for buyable listings, not sold history,
+   * and often surfaces active BIN slabs that skew “raw” comps into PSA prices.
+   */
+  const scrapeFirst = process.env.EBAY_SOLD_API_FIRST !== "true";
+  if (scrapeFirst) {
+    try {
+      const scraped = await soldViaScrape(query, options);
+      if (scraped.items.length > 0) return scraped;
+    } catch (err) {
+      console.warn("eBay sold scrape failed, trying Browse API fallback:", err);
+    }
+  }
+
   if (process.env.EBAY_APP_ID) {
     try {
       const result = await soldViaApi(query, options);
       if (result.items.length > 0) return result;
     } catch (err) {
-      console.warn("eBay sold API failed, trying scrape:", err);
+      console.warn("eBay sold API failed:", err);
     }
   }
 
-  return soldViaScrape(query, options);
+  if (!scrapeFirst) {
+    try {
+      return await soldViaScrape(query, options);
+    } catch (err) {
+      console.warn("eBay sold scrape failed after API:", err);
+    }
+  }
+
+  return { items: [], averagePriceCents: 0 };
 }
