@@ -53,7 +53,10 @@ export function DealCard({ deal }: DealCardProps) {
     deal.prices.pricechartingRaw != null ||
     deal.prices.pricechartingGraded != null ||
     deal.prices.ebaySoldAvg != null ||
-    deal.prices.collectr != null;
+    deal.prices.collectr != null ||
+    (deal.prices.tcgCollector != null && deal.prices.tcgCollector > 0) ||
+    (deal.prices.tcgCollectorVariants != null &&
+      deal.prices.tcgCollectorVariants.length > 0);
 
   return (
     <Card className="group relative overflow-hidden transition-shadow hover:shadow-lg">
@@ -196,36 +199,58 @@ export function DealCard({ deal }: DealCardProps) {
           {showPriceBreakdown ? (
             <div className="rounded-md border bg-muted/40 px-3 py-2">
               {finderCollectrEbayPriceRow ? (
-                <div
-                  className={`grid gap-x-4 gap-y-1 text-xs ${
-                    deal.prices.collectrGradedPsa10 != null &&
-                    deal.prices.collectrGradedPsa10 > 0
-                      ? "grid-cols-2 sm:grid-cols-3"
-                      : "grid-cols-2"
-                  }`}
-                >
-                  <PriceItem
-                    label={
-                      isRawFinderRow
-                        ? "Collectr (raw)"
-                        : "Collectr (collectr.com)"
-                    }
-                    value={deal.prices.collectr ?? null}
-                  />
-                  <PriceItem
-                    label={
-                      isRawFinderRow
-                        ? "eBay last 5 sold (raw)"
-                        : "eBay last 5 sold"
-                    }
-                    value={deal.prices.ebaySoldAvg}
-                  />
-                  {deal.prices.collectrGradedPsa10 != null &&
-                  deal.prices.collectrGradedPsa10 > 0 ? (
+                <div className="space-y-2 text-xs">
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
                     <PriceItem
-                      label="Collectr PSA 10 (reference)"
-                      value={deal.prices.collectrGradedPsa10}
+                      label={
+                        isRawFinderRow
+                          ? "Collectr (raw)"
+                          : "Collectr (collectr.com)"
+                      }
+                      value={deal.prices.collectr ?? null}
                     />
+                    <PriceItem
+                      label={
+                        isRawFinderRow
+                          ? "eBay last 5 sold (raw)"
+                          : "eBay last 5 sold"
+                      }
+                      value={deal.prices.ebaySoldAvg}
+                    />
+                    {deal.prices.tcgCollector != null &&
+                    deal.prices.tcgCollector > 0 ? (
+                      <PriceItem
+                        label="TCG Collector (blend)"
+                        value={deal.prices.tcgCollector}
+                      />
+                    ) : null}
+                    {deal.prices.collectrGradedPsa10 != null &&
+                    deal.prices.collectrGradedPsa10 > 0 ? (
+                      <PriceItem
+                        label="Collectr PSA 10 (reference)"
+                        value={deal.prices.collectrGradedPsa10}
+                      />
+                    ) : null}
+                  </div>
+                  {deal.prices.tcgCollectorVariants != null &&
+                  deal.prices.tcgCollectorVariants.length > 0 ? (
+                    <div className="rounded border border-dashed px-2 py-1.5 text-[11px] text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        TCG Collector variants
+                      </span>
+                      <ul className="mt-1 list-inside list-disc space-y-0.5">
+                        {deal.prices.tcgCollectorVariants
+                          .slice(0, 12)
+                          .map((v, i) => (
+                            <li key={`${v.label}-${i}`}>
+                              {v.label}:{" "}
+                              {v.priceCents != null && v.priceCents > 0
+                                ? formatCents(v.priceCents)
+                                : "N/A"}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
                   ) : null}
                 </div>
               ) : (

@@ -4,6 +4,7 @@ import { getEbaySoldAverage } from "@/lib/apis/ebay-sold";
 import { searchCards } from "@/lib/apis/pokemon-tcg";
 import { searchFacebookMarketplace } from "@/lib/apis/facebook-marketplace";
 import { getCollectrMarketPriceCents } from "@/lib/apis/optional-marketplaces";
+import { getTcgCollectorListingMatch } from "@/lib/apis/tcg-collector";
 import { calculateCollectrEbayBlend } from "@/lib/engine/finder-price-blend";
 import { titleLooksJapaneseImport } from "@/lib/listing/english-comps";
 import { listingAtOrBelowReference } from "@/lib/engine/price-aggregator";
@@ -73,7 +74,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Raw mode uses completed sold eBay pages only (no Browse API fallback) plus title filters to drop slab wording. Set COLLECTR_MARKET_API_URL so Collectr can anchor ungraded price (explicitlyUngraded in the POST body); without it, the guide is eBay-only and may be thin if sold scrape returns few rows. Graded mode matches slab grade in each title. Japanese imports are filtered out.";
+  "Raw mode uses completed sold eBay pages only (no Browse API fallback) plus title filters. Optional: COLLECTR_MARKET_API_URL (bridge) and TCG_COLLECTOR_ACCESS_TOKEN (https://www.tcgcollector.com/api) for catalog variants and prices. Graded mode matches slab grade in each title. Japanese imports are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -89,10 +90,12 @@ function medianPositiveCents(values: number[]): number | null {
 type CompBundle = {
   ebaySoldAvg: number | null;
   collectr: number | null;
+  tcgCollector: number | null;
   blendedPriceCents: number;
   sampleSize: number;
   /** Raw finder: PSA 10 Collectr hint for display only (not in blend). */
   collectrGradedPsa10: number | null;
+  tcgCollectorVariants: { label: string; priceCents: number | null }[];
 };
 
 function buildEffectiveListingQualifier(params: {
@@ -206,7 +209,7 @@ async function fetchListingCompBundle(args: {
           soldTitleMatchesGradeRough(t, collectrGrader, collectrGradeStr)
       : args.soldTitleFilter;
 
-  const [soldRes, collectrMain, collectrPsa10Side] = await Promise.all([
+  const [soldRes, collectrMain, collectrPsa10Side, tcgMatch] = await Promise.all([
     getEbaySoldAverage(cardLine, args.setName, combinedQualifier, {
       titleFilter: gradedSoldTitleFilter,
       /** Raw: never use Browse API for “sold” — it mixes active slab BINs. */
@@ -235,21 +238,37 @@ async function fetchListingCompBundle(args: {
           variantHints,
         })
       : Promise.resolve(null),
+    getTcgCollectorListingMatch({
+      cardName: collectrName,
+      setName: args.setName,
+      catalogNumber: isSealed ? undefined : parsed.catalogNumber,
+      category: args.category,
+    }),
   ]);
 
   const ebayAvg =
     soldRes.averagePriceCents > 0 ? soldRes.averagePriceCents : null;
+  const tcgCollector = tcgMatch?.primaryPriceCents ?? null;
+  const tcgCollectorVariants =
+    tcgMatch?.variants.map((v) => ({
+      label: v.variantLabel,
+      priceCents: v.priceCents,
+    })) ?? [];
+
   const blend = calculateCollectrEbayBlend({
     collectr: collectrMain,
     ebay_sold_avg: ebayAvg,
+    tcg_collector: tcgCollector,
   });
 
   return {
     ebaySoldAvg: ebayAvg,
     collectr: collectrMain,
+    tcgCollector,
     blendedPriceCents: blend.blendedPriceCents,
     sampleSize: soldRes.items.length,
     collectrGradedPsa10: collectrPsa10Side,
+    tcgCollectorVariants,
   };
 }
 
@@ -398,7 +417,11 @@ export async function GET(request: Request) {
     if (listingsFiltered.length === 0) {
       return NextResponse.json({
         deals: [],
-        marketPrices: { collectr: null, ebay_sold_avg: null },
+        marketPrices: {
+          collectr: null,
+          ebay_sold_avg: null,
+          tcg_collector: null,
+        },
         blendedPriceCents: 0,
         totalListings: 0,
         category,
@@ -507,6 +530,11 @@ export async function GET(request: Request) {
           .map((b) => b.ebaySoldAvg)
           .filter((c): c is number => c != null && c > 0)
       ),
+      tcg_collector: medianPositiveCents(
+        perListingBundles
+          .map((b) => b.tcgCollector)
+          .filter((c): c is number => c != null && c > 0)
+      ),
     };
 
     let maxSoldSample = genericBundle.sampleSize;
@@ -576,6 +604,11 @@ export async function GET(request: Request) {
             collectr: bundle.collectr,
             collectrGradedPsa10:
               category === "raw" ? bundle.collectrGradedPsa10 : null,
+            tcgCollector: bundle.tcgCollector,
+            tcgCollectorVariants:
+              bundle.tcgCollectorVariants.length > 0
+                ? bundle.tcgCollectorVariants
+                : undefined,
           },
           psaPrices: null,
           predictedGrade: null,

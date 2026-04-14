@@ -38,6 +38,10 @@ export interface Deal {
     collectr?: number | null;
     /** Raw finder only: Collectr PSA 10 reference (display; not used for deal %). */
     collectrGradedPsa10?: number | null;
+    /** tcgcollector.com primary price used in blend (when token is set). */
+    tcgCollector?: number | null;
+    /** Per-variant prices from TCG Collector (display). */
+    tcgCollectorVariants?: { label: string; priceCents: number | null }[];
   };
   psaPrices: {
     psa10: number | null;

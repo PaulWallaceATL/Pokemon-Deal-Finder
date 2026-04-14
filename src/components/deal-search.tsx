@@ -24,6 +24,7 @@ import type { SealedProductKind } from "@/lib/pokemon/finder-query";
 interface MarketPrices {
   collectr: number | null;
   ebay_sold_avg: number | null;
+  tcg_collector?: number | null;
 }
 
 interface SearchResponse {
@@ -401,6 +402,12 @@ export function DealSearch() {
                   label="eBay last-5 median"
                   value={results.marketPrices.ebay_sold_avg}
                 />
+                {results.marketPrices.tcg_collector != null ? (
+                  <PricePill
+                    label="TCG Collector median"
+                    value={results.marketPrices.tcg_collector}
+                  />
+                ) : null}
                 <div className="ml-auto flex flex-col items-end gap-1 text-sm text-muted-foreground">
                   <span>{results.totalListings} listings found</span>
                   {results.ebaySoldSampleSize != null ? (
