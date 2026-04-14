@@ -231,7 +231,8 @@ function extractVariants(card: Record<string, unknown>): TcgCollectorVariantRow[
     const typeObj = asRecord(vo.cardVariantType ?? vo.CardVariantType);
     const label =
       stringField(vo, "name", "Name") ||
-      stringField(typeObj ?? {}, "name", "Name") ||
+      stringField(typeObj ?? {}, "name", "Name", "type", "Type") ||
+      stringField(vo, "type", "Type") ||
       "Variant";
 
     const pricesRaw = (vo.tcgPrices ?? vo.TcgPrices) as unknown;
@@ -265,17 +266,49 @@ function medianPositive(values: number[]): number | null {
   return v.length % 2 === 1 ? v[mid]! : Math.round((v[mid - 1]! + v[mid]!) / 2);
 }
 
+/**
+ * Maps TCG Collector `CardVariant` type strings (and similar labels) to the same
+ * print buckets as eBay sold filtering — see tools docs: "Standard Set Foil",
+ * "Reverse Holofoil", "Parallel Set Foil", "Cosmos Holo", "Normal", etc.
+ */
+function variantLabelLooksReverse(L: string): boolean {
+  if (/\bnon[-\s]?reverse\b|\bnot\s+reverse\b/i.test(L)) return false;
+  return (
+    /\breverse\b/.test(L) ||
+    /\br\/h\b/.test(L) ||
+    /\brh\b/.test(L) ||
+    /\brev\.?\s*holo/i.test(L)
+  );
+}
+
+function variantLabelLooksHoloRare(L: string): boolean {
+  if (variantLabelLooksReverse(L)) return false;
+  return (
+    /\bholo(?:foil)?\b/i.test(L) ||
+    /\betched\b/i.test(L) ||
+    /\bcosmos\s+holo\b/i.test(L) ||
+    /\bcracked\s+ice\b/i.test(L) ||
+    /\bline\s+holo\b/i.test(L) ||
+    /\btinsel\s+holo\b/i.test(L) ||
+    /\bwaterdrop\s+holo\b/i.test(L) ||
+    /\bparallel\s+set\s+foil\b/i.test(L) ||
+    /\bstandard\s+set\s+foil\b/i.test(L) ||
+    /\bshiny\s+rare\b/i.test(L) ||
+    /\bhyper\s+rare\b/i.test(L) ||
+    (/\bfoil\b/i.test(L) && !/\breverse\b/i.test(L))
+  );
+}
+
 function variantLabelMatchesPrintKind(
   variantLabel: string,
   kind: ListingPrintKind
 ): boolean {
   const L = variantLabel.toLowerCase();
-  const rev = /reverse|r\/h|\brh\b/.test(L);
-  const hol =
-    /\bholo(?:foil)?\b|\bfoil\b/.test(L) && !rev;
+  const rev = variantLabelLooksReverse(L);
+  const hol = variantLabelLooksHoloRare(L);
   if (kind === "reverse_holo") return rev;
-  if (kind === "holo") return hol || (/\bholo/i.test(L) && !rev);
-  if (kind === "non_holo") return !rev && !/\bholo(?:foil)?\b/i.test(L);
+  if (kind === "holo") return hol;
+  if (kind === "non_holo") return !rev && !hol;
   return true;
 }
 
@@ -296,11 +329,11 @@ function pickPrimaryPriceCents(
         : "unknown";
 
   const narrow = (pool: TcgCollectorVariantRow[]): TcgCollectorVariantRow[] => {
-    if (kind === "unknown" || pool.length === 0) return pool;
-    const m = pool.filter((r) =>
+    if (pool.length === 0) return pool;
+    if (kind === "unknown") return pool;
+    return pool.filter((r) =>
       variantLabelMatchesPrintKind(r.variantLabel, kind)
     );
-    return m.length ? m : pool;
   };
 
   if (category === "raw") {
@@ -309,6 +342,7 @@ function pickPrimaryPriceCents(
     );
     const pool = nonSlab.length ? nonSlab : priced;
     const use = narrow(pool);
+    if (use.length === 0) return null;
     return Math.min(...use.map((r) => r.priceCents!));
   }
   if (category === "graded") {
@@ -317,6 +351,7 @@ function pickPrimaryPriceCents(
     );
     const pool = slab.length ? slab : priced;
     const use = narrow(pool);
+    if (use.length === 0) return null;
     const cents = use.map((r) => r.priceCents!);
     return medianPositive(cents);
   }
@@ -407,9 +442,18 @@ export async function getTcgCollectorListingMatch(opts: {
 
   let detail: Record<string, unknown> = best;
   if (id != null) {
-    const detailJson = await fetchJson(`/cards/${id}`);
+    const dqs = new URLSearchParams();
+    dqs.append("TcgRegionNames", "International");
+    const detailJson = await fetchJson(`/cards/${id}`, dqs);
     const d = asRecord(detailJson);
-    if (d && (d.cardVariants != null || d.CardVariants != null)) {
+    if (
+      d &&
+      (d.id != null ||
+        d.Id != null ||
+        d.cardId != null ||
+        d.CardId != null)
+    ) {
+      /** Prefer detail over search row — list hits are often missing full `CardVariants` + prices. */
       detail = d;
     }
   }

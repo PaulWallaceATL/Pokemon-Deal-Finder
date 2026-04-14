@@ -6,7 +6,7 @@
  * Rendered at `/pricing-pipeline`.
  */
 
-export const PRICING_PIPELINE_DOC_VERSION = "2026-04-14e";
+export const PRICING_PIPELINE_DOC_VERSION = "2026-04-14f";
 
 export const PRICING_PIPELINE_TITLE = "How instant finder prices a listing";
 
@@ -69,7 +69,7 @@ export const PRICING_PIPELINE_PHASES: PricingPipelinePhase[] = [
     bullets: [
       "**eBay sold** — completed listings HTML scrape (raw: scrape-only). Query = cardLine + set + qualifiers. Up to a small sample (e.g. ~5); **mean** sold price. Titles filtered: English, no Japanese imports, grade match (graded), raw excludes slab-looking sold when in raw mode. **Print:** reverse listings ↔ sold titles that read reverse; holo listings ↔ sold that read regular holo; **unknown** print ↔ sold that are **neither** clearly reverse nor clearly holo (so commons are not averaged with variant solds). When print is **unknown** but **TCG Collector / Pokémon TCG catalog** price exists, that catalog leg is used for the blend and the **eBay sold leg is omitted** (sold titles mix variants too often).",
       "**Collectr-style** — (1) POST to `COLLECTR_MARKET_API_URL` **or** (2) `APIFY_COLLECTR_ACTOR_ID` + `APIFY_API_TOKEN` → Apify `run-sync-get-dataset-items` with the same fields (name, set, category, grader/grade, card #, variant hints). First dataset row should expose `priceCents` or `marketPrice` (see `collectr-apify.ts`).",
-      "**TCG Collector** (optional token) — card search + variant row; **primary** price respects print when known.",
+      "**TCG Collector** (optional token) — `GET /cards` then `GET /cards/{id}` (International) for full **CardVariants** + prices. Primary price uses **only** variant rows whose type matches the listing print (reverse / holo / non-holo); if none match, that catalog leg is omitted — never blended across mismatched variants.",
       "**Pokémon TCG API** (raw only, if TCG Collector missing) — TCGPlayer-style market for matched card.",
     ],
     codeRefs: [
