@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/supabase/types";
 import type { PredictedGradeData, ProductType } from "@/lib/mock-data";
+import type { ListingPrintKind } from "@/lib/listing/listing-comp-query";
 
 type DealRow = Database["public"]["Tables"]["deals"]["Row"];
 
@@ -57,6 +58,10 @@ export interface Deal {
   ebayLast5AvgCents?: number | null;
   /** How the listing price was compared (e.g. slab-matched grade). */
   listingReferenceNote?: string | null;
+  /**
+   * Instant finder: print used for comps (slab photo + title). Omitted for DB deals.
+   */
+  listingPrintKind?: ListingPrintKind;
 }
 
 export function dealRowToUI(row: DealRow): Deal {

@@ -9,14 +9,20 @@ import type { FinderListingCategory } from "@/lib/pokemon/finder-query";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 
-const SYSTEM = `You classify Pokémon TCG cards shown in marketplace listing photos.
+const SYSTEM = `You classify the Pokémon TCG **print variant** from a marketplace listing photo.
 
-Focus on the **graded slab label** (PSA, CGC, BGS, SGC, TAG) if visible—not the card art alone.
-Use the exact wording on the label when possible:
-- "Reverse Holofoil", "Reverse Holo", "Rev Holo", "R/H" → reverse_holo
-- "Holofoil", "Regular Holofoil", "Holo Rare", "Holo" (rare holo, not reverse) → holo
-- Label shows only set name + Pokémon name + collector number, with **no** holo/reverse line (typical common/uncommon) → non_holo
-- Slab not visible, unreadable, or not Pokémon → unknown
+READ ONLY the **white cert label** inside the slab (often outlined in red on PSA). That label lists year, set, Pokémon name(s), collector number, grade, and sometimes an extra line for the print type.
+
+CRITICAL — do NOT guess from card artwork:
+- Iridescent, sparkly, or “shiny” areas on the **Pokémon illustration** are NOT proof of Reverse Holofoil. Many commons have foil effects. You must see those words on the **label text**.
+
+How to decide:
+1. **reverse_holo** — The label text clearly includes REVERSE, REV HOLO, R/H, REVERSE HOLOFOIL, or similar (not merely “shiny” art).
+2. **holo** — The label includes HOLOFOIL, REGULAR HOLOFOIL, HOLO RARE, or a stamped/holo variant line that is **not** reverse.
+3. **non_holo** — The label shows the usual lines (name, set, number, year, grade) and you do **not** see any reverse/holofoil/holo-rare/stamped variant line. Typical commons and regular rares without a holo line use this.
+4. **unknown** — Slab/label not visible, too blurry to read variant words, or not a Pokémon slab.
+
+When the label is readable and shows only name + set + number + grade with no variant line, answer **non_holo** (not unknown).
 
 Reply with ONLY valid JSON:
 {"printKind":"reverse_holo"|"holo"|"non_holo"|"unknown","confidence":"high"|"medium"|"low"}`;
@@ -27,6 +33,13 @@ const PRINT_KINDS = new Set([
   "non_holo",
   "unknown",
 ]);
+
+/** eBay thumbs use s-l225 etc.; larger image improves label OCR. */
+export function upgradeListingImageForVision(url: string): string {
+  return url
+    .trim()
+    .replace(/s-l\d+(\.\w+)$/i, "s-l1600$1");
+}
 
 function isAllowedListingImageUrl(url: string): boolean {
   try {
@@ -60,11 +73,11 @@ export async function inferPrintKindFromSlabImage(
   imageUrl: string
 ): Promise<ListingPrintKind | null> {
   if (!OPENAI_API_KEY) return null;
-  const trimmed = imageUrl?.trim();
+  const trimmed = upgradeListingImageForVision(imageUrl ?? "");
   if (!trimmed || !isAllowedListingImageUrl(trimmed)) return null;
 
   const model =
-    process.env.SLAB_PRINT_VISION_MODEL?.trim() || "gpt-4o-mini";
+    process.env.SLAB_PRINT_VISION_MODEL?.trim() || "gpt-4o";
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -82,7 +95,7 @@ export async function inferPrintKindFromSlabImage(
             content: [
               {
                 type: "text",
-                text: "What print type does the slab label indicate? JSON only.",
+                text: "Read the slab cert label (white area). What printKind applies? JSON only.",
               },
               {
                 type: "image_url",

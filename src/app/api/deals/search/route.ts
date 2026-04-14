@@ -655,6 +655,8 @@ export async function GET(request: Request) {
           listing.title,
           setNameForMarket
         );
+        const listingPrintKind: ListingPrintKind =
+          printByListingId.get(listing.id) ?? parsed.printKind;
 
         const { referenceCents, note } = listingMarketReferenceCents({
           listingTitle: listing.title,
@@ -719,6 +721,7 @@ export async function GET(request: Request) {
           predictedGrade: null,
           ebayLast5AvgCents: bundle.ebaySoldAvg,
           listingReferenceNote: note,
+          listingPrintKind,
         };
       })
       .filter((d): d is Deal => d !== null)

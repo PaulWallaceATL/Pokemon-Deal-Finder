@@ -179,7 +179,9 @@ async function searchViaApi(
         conditionId?: string;
       }): EbayListing => {
         const priceDollars = parseFloat(item.price?.value ?? "0");
-        const imageUrl = item.image?.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? "";
+        const rawImage =
+          item.image?.imageUrl ?? item.thumbnailImages?.[0]?.imageUrl ?? "";
+        const imageUrl = toHighRes(rawImage);
         return {
           itemId: item.itemId,
           title: item.title,

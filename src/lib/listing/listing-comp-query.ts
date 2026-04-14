@@ -30,6 +30,20 @@ export const NON_HOLO_TITLE_RE = /\bnon[-\s]?holo(?:foil)?\b/i;
 export const REGULAR_HOLO_TITLE_RE =
   /\bregular\s+holo(?:foil)?\b|\bholofoil\b|\bholo\s+rare\b/i;
 
+/** Short label for badges (instant finder + deal rows). */
+export function listingPrintKindDisplayLabel(kind: ListingPrintKind): string {
+  switch (kind) {
+    case "reverse_holo":
+      return "Reverse holofoil";
+    case "holo":
+      return "Holofoil (rare holo)";
+    case "non_holo":
+      return "Common / non-holo";
+    default:
+      return "Print variant unclear";
+  }
+}
+
 export function inferListingPrintKind(title: string): ListingPrintKind {
   const raw = title.normalize("NFKC");
   if (NON_HOLO_TITLE_RE.test(raw)) return "non_holo";

@@ -205,6 +205,13 @@ export function DealSearch() {
                   <SelectItem value="graded">Graded slab</SelectItem>
                 </SelectContent>
               </Select>
+              {singlesType === "graded" ? (
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Each result shows a print badge (common / holofoil / reverse
+                  holofoil). We read the PSA-style label on the listing photo when
+                  possible so comps match the slab, not only the title.
+                </p>
+              ) : null}
             </div>
 
             {singlesType === "graded" ? (

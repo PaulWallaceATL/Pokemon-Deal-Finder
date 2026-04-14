@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { PRODUCT_TYPE_LABELS, type PredictedGradeData } from "@/lib/mock-data";
 import type { Deal } from "@/lib/deals/types";
+import { listingPrintKindDisplayLabel } from "@/lib/listing/listing-comp-query";
 import { PSA_GRADE_LABELS } from "@/lib/grading/psa-standards";
 
 function formatCents(cents: number): string {
@@ -115,6 +116,14 @@ export function DealCard({ deal }: DealCardProps) {
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                   {deal.rarity}
                 </Badge>
+                {deal.listingPrintKind ? (
+                  <Badge
+                    variant="outline"
+                    className="border-sky-500/40 bg-sky-500/10 text-[10px] px-1.5 py-0 text-sky-900 dark:text-sky-100"
+                  >
+                    {listingPrintKindDisplayLabel(deal.listingPrintKind)}
+                  </Badge>
+                ) : null}
                 {deal.ebayLast5AvgCents != null && deal.ebayLast5AvgCents > 0 ? (
                   <Badge
                     variant="outline"
