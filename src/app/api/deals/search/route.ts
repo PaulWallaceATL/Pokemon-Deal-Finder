@@ -335,10 +335,17 @@ async function fetchListingCompBundle(args: {
     tcgCollectorVariants,
   };
 
+  const catalogCents = catalogPriceForBlend(bundle);
+  /** When print is unclear, eBay sold titles often mix variants — prefer catalog. */
+  const ebayInBlend =
+    printKind === "unknown" && catalogCents != null && catalogCents > 0
+      ? null
+      : ebayAvg;
+
   const blend = calculateCollectrEbayBlend({
     collectr: collectrMain,
-    ebay_sold_avg: ebayAvg,
-    tcg_collector: catalogPriceForBlend(bundle),
+    ebay_sold_avg: ebayInBlend,
+    tcg_collector: catalogCents,
   });
 
   return {

@@ -86,15 +86,19 @@ export function slabTailAfterGrade(title: string): string {
 }
 
 /**
- * For sold comps: when the listing print is explicit, keep pools disjoint —
- * reverse holo only vs reverse sold rows; holo only vs rows that clearly read
- * as regular holo (never reverse holo, never “no holo” titles alone).
+ * For sold comps: keep reverse / holo / “plain” pools disjoint.
+ * **unknown** listing → only sold titles that do **not** read as reverse holo
+ * or regular holo (avoids mixing common with reverse or holo sold prices).
  */
 export function soldTitleCompatibleWithListingPrintKind(
   listingPrintKind: ListingPrintKind,
   soldTitle: string
 ): boolean {
-  if (listingPrintKind === "unknown") return true;
+  if (listingPrintKind === "unknown") {
+    if (soldTitleLooksLikeReverseHolo(soldTitle)) return false;
+    if (soldTitleLooksLikeRegularHolo(soldTitle)) return false;
+    return true;
+  }
   const t = soldTitle.normalize("NFKC");
   const soldReverse = soldTitleLooksLikeReverseHolo(soldTitle);
   if (listingPrintKind === "reverse_holo") {

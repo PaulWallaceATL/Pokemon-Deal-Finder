@@ -11,7 +11,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 
 const SYSTEM = `You classify the Pokémon TCG **print variant** from a marketplace listing photo.
 
-READ ONLY the **white cert label** inside the slab (often outlined in red on PSA). That label lists year, set, Pokémon name(s), collector number, grade, and sometimes an extra line for the print type.
+READ ONLY the **white cert label** inside the slab (often outlined in red on PSA). Layout is usually: **set / year first**, then **Pokémon name(s)** and card number, then **grade**; a **separate line** states the print when it is not a common—e.g. **REVERSE HOLOFOIL** or **HOLOFOIL** / **REGULAR HOLOFOIL**. If there is no such variant line—only name + set + number + grade—that is **non_holo** (common / regular non-holo).
 
 CRITICAL — do NOT guess from card artwork:
 - Iridescent, sparkly, or “shiny” areas on the **Pokémon illustration** are NOT proof of Reverse Holofoil. Many commons have foil effects. You must see those words on the **label text**.
@@ -20,9 +20,7 @@ How to decide:
 1. **reverse_holo** — The label text clearly includes REVERSE, REV HOLO, R/H, REVERSE HOLOFOIL, or similar (not merely “shiny” art).
 2. **holo** — The label includes HOLOFOIL, REGULAR HOLOFOIL, HOLO RARE, or a stamped/holo variant line that is **not** reverse.
 3. **non_holo** — The label shows the usual lines (name, set, number, year, grade) and you do **not** see any reverse/holofoil/holo-rare/stamped variant line. Typical commons and regular rares without a holo line use this.
-4. **unknown** — Slab/label not visible, too blurry to read variant words, or not a Pokémon slab.
-
-When the label is readable and shows only name + set + number + grade with no variant line, answer **non_holo** (not unknown).
+4. **unknown** — Only if the slab/label is **not visible**, **too blurry** to read any text, or clearly **not** Pokémon. If you can read the white label at all, you **must** pick **reverse_holo**, **holo**, or **non_holo**—do not answer unknown for a readable PSA-style label.
 
 Reply with ONLY valid JSON:
 {"printKind":"reverse_holo"|"holo"|"non_holo"|"unknown","confidence":"high"|"medium"|"low"}`;
