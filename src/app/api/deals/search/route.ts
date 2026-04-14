@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchEbayListings } from "@/lib/apis/ebay-browse";
 import { getEbaySoldAverage } from "@/lib/apis/ebay-sold";
-import { searchCards } from "@/lib/apis/pokemon-tcg";
+import { searchCards, type PokemonCard } from "@/lib/apis/pokemon-tcg";
 import { searchFacebookMarketplace } from "@/lib/apis/facebook-marketplace";
 import { getCollectrMarketPriceCents } from "@/lib/apis/optional-marketplaces";
 import { getPokemonTcgMarketPriceCentsForListing } from "@/lib/apis/pokemontcg-listing-price";
@@ -75,7 +75,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Raw mode uses completed sold eBay pages only (no Browse API fallback) plus title filters. Optional: COLLECTR_MARKET_API_URL (bridge). Catalog price in the blend uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; otherwise raw listings use Pokémon TCG API (api.pokemontcg.io) TCGPlayer market when available (optional POKEMON_TCG_API_KEY for rate limits). Graded mode matches slab grade in each title. Japanese imports are filtered out.";
+  "Raw mode prefers completed sold eBay HTML; on Vercel, when that returns no rows, the app may use eBay Browse listings as a degraded comp (unless EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false). Optional: COLLECTR_MARKET_API_URL (bridge). Catalog price uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; otherwise Pokémon TCG API (api.pokemontcg.io) plus your search context (optional POKEMON_TCG_API_KEY). Graded mode matches slab grade in each title. Japanese imports are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -164,6 +164,10 @@ async function fetchListingCompBundle(args: {
   sealedKind: SealedProductKind;
   finishSuffix: string;
   soldTitleFilter: (title: string) => boolean;
+  /** User’s search bar text — loosens Pokémon TCG API lookup vs title-only parse. */
+  userSearchQuery?: string;
+  /** First hit from `searchCards(q)` — anchors catalog pricing to the query, not exact listing title. */
+  tcgAnchorCard?: PokemonCard | null;
 }): Promise<CompBundle> {
   const isSealed = args.category === "sealed";
   const parsed = parseListingCompFromTitle(args.listingTitle, args.setName);
@@ -265,6 +269,10 @@ async function fetchListingCompBundle(args: {
             cardName: collectrName,
             setName: args.setName,
             catalogNumber: parsed.catalogNumber,
+            alternateNames: [
+              args.tcgAnchorCard?.name?.trim(),
+              args.userSearchQuery?.trim(),
+            ].filter((x): x is string => Boolean(x && x.length >= 2)),
           })
         : Promise.resolve(null),
     ]);
@@ -494,6 +502,8 @@ export async function GET(request: Request) {
       sealedKind,
       finishSuffix,
       soldTitleFilter,
+      userSearchQuery: query,
+      tcgAnchorCard: tcgCard,
     });
 
     const freq = new Map<string, number>();
@@ -529,6 +539,8 @@ export async function GET(request: Request) {
           sealedKind,
           finishSuffix,
           soldTitleFilter,
+          userSearchQuery: query,
+          tcgAnchorCard: tcgCard,
         });
         return { k, b };
       }
@@ -685,7 +697,7 @@ export async function GET(request: Request) {
       ebaySoldSampleSize: maxSoldSample,
       message:
         deals.length === 0 && listingsFiltered.length > 0
-          ? "No deals: every listing’s market guide was missing or above list price. On Vercel, eBay sold HTML often returns 0 comps — set TCG_COLLECTOR_ACCESS_TOKEN (per-listing catalog prices) and/or COLLECTR_MARKET_API_URL, or EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=true for a degraded eBay Browse fallback on raw."
+          ? "No deals: every listing’s market guide was missing or above list price. On Vercel, sold HTML often fails; the app now tries eBay Browse as a fallback when scrape returns no rows (set EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false to disable). Optional: COLLECTR_MARKET_API_URL, TCG_COLLECTOR_ACCESS_TOKEN, POKEMON_TCG_API_KEY."
           : undefined,
     });
   } catch (error) {

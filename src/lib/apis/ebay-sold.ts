@@ -245,11 +245,17 @@ export async function getEbaySoldAverage(
     } catch (err) {
       console.warn("eBay sold scrape-only (raw) failed:", err);
     }
-    /** Vercel / serverless often cannot scrape eBay sold HTML; optional degraded fallback. */
-    if (
-      process.env.EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK === "true" &&
-      process.env.EBAY_APP_ID
-    ) {
+    /**
+     * Vercel / serverless often cannot scrape eBay sold HTML (0 rows). Browse
+     * `item_summary` is **not** sold history (active listings) — noisy for raw,
+     * but better than a dead blend. On Vercel we default this on when EBAY
+     * credentials exist; set `EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false` to opt out.
+     */
+    const browseFallback =
+      process.env.EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK === "true" ||
+      (process.env.VERCEL === "1" &&
+        process.env.EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK !== "false");
+    if (browseFallback && process.env.EBAY_APP_ID) {
       try {
         const api = await soldViaApi(query, options);
         if (api.items.length > 0) return api;
