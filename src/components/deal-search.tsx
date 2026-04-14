@@ -395,10 +395,12 @@ export function DealSearch() {
                       : "N/A"}
                   </p>
                   <p className="mt-1 max-w-md text-[11px] text-muted-foreground">
-                    Median of per-listing blends (Collectr when configured, plus
-                    eBay last-five sold from that card’s title: number, reverse vs
-                    non-reverse, Radiant, etc.). Each deal row uses its own comps;
-                    this headline is only a rough center of the current result set.{" "}
+                    Median of each listing&apos;s reference (Collectr-style guide
+                    when bridge or Apify actor is set—otherwise mean of eBay
+                    last-five sold + catalog).
+                    eBay sold is not mixed into Collectr (sold averages skew high).
+                    Each row uses its own comps; this headline is a rough center of
+                    the result set.{" "}
                     <Link
                       href="/pricing-pipeline"
                       className="font-medium text-foreground underline-offset-2 hover:underline"
@@ -427,8 +429,9 @@ export function DealSearch() {
                   <span>{results.totalListings} listings found</span>
                   {results.ebaySoldSampleSize != null ? (
                     <span className="text-[11px]">
-                      Sold comps in blend: {results.ebaySoldSampleSize} listing
-                      {results.ebaySoldSampleSize !== 1 ? "s" : ""} (capped at 5)
+                      eBay sold sample: {results.ebaySoldSampleSize} listing
+                      {results.ebaySoldSampleSize !== 1 ? "s" : ""} (capped at 5;
+                      used in reference only if Collectr-style guide is not set)
                     </span>
                   ) : null}
                   {dealsAboveThreshold && dealsAboveThreshold.length > 0 && (

@@ -78,7 +78,7 @@ const MAX_UNIQUE_COMP_KEYS = 26;
 const COMP_FETCH_CONCURRENCY = 5;
 
 const MARKET_SKEW_NOTE =
-  "Raw mode prefers completed sold eBay HTML; on Vercel, when that returns no rows, the app may use eBay Browse listings as a degraded comp (unless EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false). Optional: COLLECTR_MARKET_API_URL (bridge). Catalog price uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; otherwise Pokémon TCG API (api.pokemontcg.io) plus your search context (optional POKEMON_TCG_API_KEY). Graded mode matches slab grade in each title. When OPENAI_API_KEY is set, slab listing photos are classified for print type (common vs holo vs reverse); set SLAB_PRINT_VISION=false to disable. Japanese imports are filtered out.";
+  "When Collectr-style pricing returns a value (COLLECTR_MARKET_API_URL or APIFY_COLLECTR_ACTOR_ID + APIFY_API_TOKEN), that value is the per-listing reference (eBay sold is not averaged in—sold means skew high vs many market guides). Without that leg, reference is the mean of eBay sold + catalog. Raw mode prefers completed sold eBay HTML; on Vercel, when that returns no rows, the app may use eBay Browse listings as a degraded comp (unless EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false). Catalog uses TCG Collector when TCG_COLLECTOR_ACCESS_TOKEN is set; else Pokémon TCG API (optional POKEMON_TCG_API_KEY). Graded mode matches slab grade in each title. OPENAI_API_KEY enables slab photo print classification (SLAB_PRINT_VISION=false to disable). Japanese imports are filtered out.";
 
 function medianPositiveCents(values: number[]): number | null {
   const v = values
@@ -759,7 +759,7 @@ export async function GET(request: Request) {
       ebaySoldSampleSize: maxSoldSample,
       message:
         deals.length === 0 && listingsFiltered.length > 0
-          ? "No deals: every listing’s market guide was missing or above list price. On Vercel, sold HTML often fails; the app now tries eBay Browse as a fallback when scrape returns no rows (set EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false to disable). Optional: COLLECTR_MARKET_API_URL, TCG_COLLECTOR_ACCESS_TOKEN, POKEMON_TCG_API_KEY."
+          ? "No deals: every listing’s market guide was missing or above list price. On Vercel, sold HTML often fails; the app now tries eBay Browse as a fallback when scrape returns no rows (set EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false to disable). Optional: COLLECTR_MARKET_API_URL, APIFY_COLLECTR_ACTOR_ID (+ APIFY_API_TOKEN), TCG_COLLECTOR_ACCESS_TOKEN, POKEMON_TCG_API_KEY."
           : undefined,
     });
   } catch (error) {

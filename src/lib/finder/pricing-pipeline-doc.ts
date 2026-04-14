@@ -6,14 +6,14 @@
  * Rendered at `/pricing-pipeline`.
  */
 
-export const PRICING_PIPELINE_DOC_VERSION = "2026-04-14c";
+export const PRICING_PIPELINE_DOC_VERSION = "2026-04-14e";
 
 export const PRICING_PIPELINE_TITLE = "How instant finder prices a listing";
 
 export const PRICING_PIPELINE_INTRO = [
-  "The live deal search (`/api/deals/search`) compares each marketplace **ask** to a **reference guide** built from a few independent signals.",
+  "The live deal search (`/api/deals/search`) compares each marketplace **ask** to a **reference guide**.",
+  "When **Collectr-style** data returns a price (HTTPS bridge **or** optional Apify actor), that value **is** the per-listing reference. eBay sold is still fetched for display and for listings without that leg—it is **not averaged in** on top of Collectr, because eBay prices often sit **above** many market guides and would skew the number **up**.",
   "A listing appears as a deal only when **ask ≤ reference** (at or below the guide—not above it).",
-  "If a card “looks above market,” the guide is often **lower than your intuition** (comps or catalog skew), not a reversed comparison.",
 ];
 
 export type PricingCodeRef = {
@@ -68,13 +68,14 @@ export const PRICING_PIPELINE_PHASES: PricingPipelinePhase[] = [
     summary: "Three (or four on raw) network calls run together via Promise.all.",
     bullets: [
       "**eBay sold** — completed listings HTML scrape (raw: scrape-only). Query = cardLine + set + qualifiers. Up to a small sample (e.g. ~5); **mean** sold price. Titles filtered: English, no Japanese imports, grade match (graded), raw excludes slab-looking sold when in raw mode. **Print:** reverse listings ↔ sold titles that read reverse; holo listings ↔ sold that read regular holo; **unknown** print ↔ sold that are **neither** clearly reverse nor clearly holo (so commons are not averaged with variant solds). When print is **unknown** but **TCG Collector / Pokémon TCG catalog** price exists, that catalog leg is used for the blend and the **eBay sold leg is omitted** (sold titles mix variants too often).",
-      "**Collectr** — POST to `COLLECTR_MARKET_API_URL` with name, set, category, grader/grade, card #, variant hints.",
+      "**Collectr-style** — (1) POST to `COLLECTR_MARKET_API_URL` **or** (2) `APIFY_COLLECTR_ACTOR_ID` + `APIFY_API_TOKEN` → Apify `run-sync-get-dataset-items` with the same fields (name, set, category, grader/grade, card #, variant hints). First dataset row should expose `priceCents` or `marketPrice` (see `collectr-apify.ts`).",
       "**TCG Collector** (optional token) — card search + variant row; **primary** price respects print when known.",
       "**Pokémon TCG API** (raw only, if TCG Collector missing) — TCGPlayer-style market for matched card.",
     ],
     codeRefs: [
       { path: "src/lib/apis/ebay-sold.ts", label: "getEbaySoldAverage" },
       { path: "src/lib/apis/optional-marketplaces.ts", label: "getCollectrMarketPriceCents" },
+      { path: "src/lib/apis/collectr-apify.ts", label: "Apify Collectr actor (optional)" },
       { path: "src/lib/apis/tcg-collector.ts", label: "getTcgCollectorListingMatch" },
       { path: "src/lib/apis/pokemontcg-listing-price.ts", label: "getPokemonTcgMarketPriceCentsForListing" },
     ],
@@ -97,8 +98,8 @@ export const PRICING_PIPELINE_PHASES: PricingPipelinePhase[] = [
     title: "5. Blend → reference",
     summary: "Simple average of every positive source—no 0.3/0.3 weights like the DB engine.",
     bullets: [
-      "Collectr, eBay sold average, and catalog (TCG Collector or Pokémon TCG) are collected.",
-      "**blendedPriceCents = round(sum of available legs / count of legs)** — equal weight per leg. When print is **unknown** and a **catalog** price exists, **eBay sold is omitted** from the blend so mixed-variant sold titles do not move the guide.",
+      "Collectr, eBay sold average, and catalog (TCG Collector or Pokémon TCG) are still **fetched** (eBay for display / context).",
+      "**Reference price:** if **Collectr** returns a value, **that number alone** is the guide (no equal-weight mean with eBay—sold averages often sit high vs “market”). If Collectr is missing, **blendedPriceCents** is the **mean** of whatever remains (eBay sold + catalog). When print is **unknown** and catalog exists, eBay is already omitted from that fallback mean (see phase 3).",
       "Graded reference uses that blend directly (no PSA grade ladder interpolation in the finder).",
     ],
     codeRefs: [
@@ -129,13 +130,13 @@ export const PRICING_SOURCES_TABLE: {
 }[] = [
   {
     source: "eBay completed (scraped)",
-    role: "Sold comps average",
-    notes: "Raw mode avoids Browse “sold” fallback unless env allows (noisy). Graded applies title filters for grade + print.",
+    role: "Sold comps average (fallback leg)",
+    notes: "Used for the reference **only when Collectr is not configured**. Sold means are noisy (few rows, outliers) and listings often clear **above** many “current market” guides—easy to skew a simple average **up**.",
   },
   {
-    source: "Collectr bridge",
-    role: "Third-party market",
-    notes: "Whatever your `COLLECTR_MARKET_API_URL` returns for the given context.",
+    source: "Collectr-style (bridge or Apify)",
+    role: "Primary market guide",
+    notes: "When `COLLECTR_MARKET_API_URL` **or** Apify (`APIFY_COLLECTR_ACTOR_ID` + `APIFY_API_TOKEN`) yields `priceCents`, that value **is** the instant-finder reference. eBay sold is not averaged in on top of it. The app does not scrape collectr.com directly—use your bridge, official Collectr API inside an actor, or another compliant source.",
   },
   {
     source: "TCG Collector / Pokémon TCG API",
@@ -145,7 +146,9 @@ export const PRICING_SOURCES_TABLE: {
 ];
 
 export const PRICING_CAVEATS = [
-  "A **mean** of a few solds is sensitive to outliers; the blend mean can sit below or above “true” fair value.",
+  "A **mean** of only a few sold prices is sensitive to **outliers**—one high sale moves the average a lot.",
+  "eBay **sold and active listings** often clear **higher** than many “current market” definitions; buyers pay up, fees get baked in, and thin samples **skew averages upward**. The app treats **Collectr-style** data (bridge or Apify) as the **primary guide** whenever it returns a price, instead of averaging it together with eBay sold.",
+  "If that Collectr-style leg is **not** wired up, the fallback is still a **mean** of eBay sold + catalog—same outlier / skew caveats apply.",
   "Collectr and catalog rows can still mismatch **exact slab variant** even with print hints and vision.",
   "Deduped **comp keys** batch network calls: listings sharing the same key reuse one bundle (title + vision print + grade).",
 ];
@@ -154,7 +157,7 @@ export const PRICING_CAVEATS = [
 export const PRICING_PIPELINE_MERMAID = `flowchart TB
   IN["Inputs: title, set, print kind, grade"] --> PARSE["Parse: card line + sold qualifiers"]
   PARSE --> FETCH["Parallel: eBay sold mean, Collectr, catalog slot"]
-  FETCH --> BLEND["Blend: arithmetic mean of each positive leg"]
+  FETCH --> BLEND["Guide: Collectr-style if bridge or Apify returns price; else mean of eBay + catalog"]
   BLEND --> GATE{"listing ask <= reference?"}
   GATE -->|yes| DEAL["Show deal; sort by discount pct"]
   GATE -->|no| DROP["Drop listing"]

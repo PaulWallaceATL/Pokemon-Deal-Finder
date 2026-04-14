@@ -1,10 +1,14 @@
 /**
- * Collectr (collectr.com) pricing for the finder: set `COLLECTR_MARKET_API_URL`
- * to an HTTPS endpoint that accepts POST JSON
- * `{ cardName, setName?, category, grader?, grade?, cardNumber?, listingTitle?, variantHints? }`
- * and returns `{ priceCents: number }`
- * (English / US market price your bridge resolves from Collectr).
+ * Collectr-style pricing for the finder, in order:
+ * 1. `COLLECTR_MARKET_API_URL` — your HTTPS bridge (POST → `{ priceCents }`).
+ * 2. `APIFY_COLLECTR_ACTOR_ID` + `APIFY_API_TOKEN` — Apify actor (see `collectr-apify.ts`).
+ *
+ * This app does **not** scrape Collectr’s website (their API terms forbid that
+ * outside official API access). Use a bridge, official Collectr API keys in your
+ * actor, or another compliant source inside Apify.
  */
+
+import { getCollectrPriceViaApify } from "@/lib/apis/collectr-apify";
 
 async function postPriceCents(
   url: string | undefined,
@@ -53,7 +57,9 @@ export async function getCollectrMarketPriceCents(context: {
 }): Promise<number | null> {
   const url = process.env.COLLECTR_MARKET_API_URL;
   const key = process.env.COLLECTR_MARKET_API_KEY;
-  return postPriceCents(url, key, context);
+  const fromBridge = await postPriceCents(url, key, context);
+  if (fromBridge != null) return fromBridge;
+  return getCollectrPriceViaApify(context);
 }
 
 export async function getAltAppMarketPriceCents(context: {
