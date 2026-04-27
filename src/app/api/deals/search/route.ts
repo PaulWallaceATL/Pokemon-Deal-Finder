@@ -40,6 +40,12 @@ import {
   type ListingPrintKind,
 } from "@/lib/listing/listing-comp-query";
 import { attachSlabPrintKindByListingId } from "@/lib/listing/slab-print-vision";
+import {
+  analyzePsaStrictFromImageUrl,
+  centeringCrossCheckUrl,
+  visionToStrictScanReport,
+  type PsaStrictVisionJson,
+} from "@/lib/grading/psa-strict-vision";
 
 export const maxDuration = 120;
 
@@ -354,6 +360,28 @@ async function fetchListingCompBundle(args: {
   };
 }
 
+function dealWithStrictPsaPrediction(
+  deal: Deal,
+  vision: PsaStrictVisionJson
+): Deal {
+  return {
+    ...deal,
+    predictedGrade: {
+      grade: vision.mostLikelyGrade,
+      centering: {
+        frontLR: vision.centering.frontLR,
+        frontTB: vision.centering.frontTB,
+      },
+      confidence: vision.confidence,
+      source: "psa10_scan",
+      strictReport: visionToStrictScanReport(vision),
+    },
+    listingReferenceNote: deal.listingReferenceNote
+      ? `${deal.listingReferenceNote} · PSA 10 candidate scan (strict vision).`
+      : "PSA 10 candidate scan (strict vision).",
+  };
+}
+
 async function mapInChunks<T, R>(
   items: T[],
   chunkSize: number,
@@ -381,6 +409,11 @@ export async function GET(request: Request) {
   const grade = searchParams.get("grade")?.trim() || "10";
   const sealedKind = parseSealedKind(searchParams.get("sealedKind"));
   const finish = parseCardFinish(searchParams.get("finish"));
+  const psa10ScanRaw = searchParams.get("psa10Scan");
+  const psa10ScanLimit =
+    psa10ScanRaw != null && psa10ScanRaw !== ""
+      ? Math.min(24, Math.max(0, parseInt(psa10ScanRaw, 10) || 0))
+      : 0;
 
   if (!query) {
     return NextResponse.json(
@@ -654,7 +687,7 @@ export async function GET(request: Request) {
       maxSoldSample = Math.max(maxSoldSample, b.sampleSize);
     }
 
-    const deals: Deal[] = listingsFiltered
+    let deals: Deal[] = listingsFiltered
       .map((listing): Deal | null => {
         const bundle = resolveBundle(listing);
         maxSoldSample = Math.max(maxSoldSample, bundle.sampleSize);
@@ -735,6 +768,88 @@ export async function GET(request: Request) {
       .filter((d): d is Deal => d !== null)
       .sort((a, b) => b.discountPct - a.discountPct);
 
+    let psa10Scan:
+      | {
+          mode: "psa10_strict";
+          applicable: boolean;
+          scanLimit: number;
+          scanned: number;
+          matched: number;
+          centeringToolUrl: string;
+          message?: string;
+        }
+      | undefined;
+
+    if (psa10ScanLimit > 0) {
+      const centeringToolUrl = centeringCrossCheckUrl();
+      if (category !== "raw") {
+        psa10Scan = {
+          mode: "psa10_strict",
+          applicable: false,
+          scanLimit: psa10ScanLimit,
+          scanned: 0,
+          matched: 0,
+          centeringToolUrl,
+          message:
+            "PSA 10 candidate scan only applies to raw singles. Switch to Raw (ungraded) and search again.",
+        };
+      } else if (!process.env.OPENAI_API_KEY) {
+        psa10Scan = {
+          mode: "psa10_strict",
+          applicable: false,
+          scanLimit: psa10ScanLimit,
+          scanned: 0,
+          matched: 0,
+          centeringToolUrl,
+          message:
+            "Strict PSA vision requires OPENAI_API_KEY. Use a centering tool (e.g. mew centering) on listing photos manually.",
+        };
+      } else {
+        const hadDealsBeforeScan = deals.length > 0;
+        const slice = deals.slice(0, psa10ScanLimit);
+        const scanResults = await mapInChunks(slice, 2, async (deal) => {
+          const url = deal.ebayImageUrl || deal.imageUrl;
+          if (!url) return null;
+          const vision = await analyzePsaStrictFromImageUrl(url, {
+            condition: deal.condition,
+          });
+          if (!vision?.isPsa10Candidate) return null;
+          return dealWithStrictPsaPrediction(deal, vision);
+        });
+        const candidates = scanResults.filter((d): d is Deal => d != null);
+        deals = candidates;
+        let scanMessage: string | undefined;
+        if (candidates.length === 0) {
+          if (slice.length > 0) {
+            scanMessage =
+              "No scanned listings passed strict PSA 10 candidate rules (harsh vision + unseen reverse risk). Try a higher psa10Scan count or a broader query. Cross-check photos on the centering tool URL below.";
+          } else if (!hadDealsBeforeScan) {
+            scanMessage =
+              "PSA 10 scan had no deal-priced listings to evaluate. Try a different search or relax price/deal filters first.";
+          }
+        }
+        psa10Scan = {
+          mode: "psa10_strict",
+          applicable: true,
+          scanLimit: psa10ScanLimit,
+          scanned: slice.length,
+          matched: candidates.length,
+          centeringToolUrl,
+          message: scanMessage,
+        };
+      }
+    }
+
+    const defaultNoDealsMessage =
+      deals.length === 0 && listingsFiltered.length > 0
+        ? "No deals: every listing’s market guide was missing or above list price. On Vercel, sold HTML often fails; the app now tries eBay Browse as a fallback when scrape returns no rows (set EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false to disable). Optional: COLLECTR_MARKET_API_URL, APIFY_COLLECTR_ACTOR_ID (+ APIFY_API_TOKEN), TCG_COLLECTOR_ACCESS_TOKEN, POKEMON_TCG_API_KEY."
+        : undefined;
+
+    const responseMessage =
+      psa10Scan?.applicable && psa10Scan.message
+        ? psa10Scan.message
+        : defaultNoDealsMessage;
+
     return NextResponse.json({
       deals,
       marketPrices,
@@ -757,10 +872,8 @@ export async function GET(request: Request) {
       grade: category === "graded" ? grade : undefined,
       disclaimer: MARKET_SKEW_NOTE,
       ebaySoldSampleSize: maxSoldSample,
-      message:
-        deals.length === 0 && listingsFiltered.length > 0
-          ? "No deals: every listing’s market guide was missing or above list price. On Vercel, sold HTML often fails; the app now tries eBay Browse as a fallback when scrape returns no rows (set EBAY_SOLD_RAW_ALLOW_BROWSE_FALLBACK=false to disable). Optional: COLLECTR_MARKET_API_URL, APIFY_COLLECTR_ACTOR_ID (+ APIFY_API_TOKEN), TCG_COLLECTOR_ACCESS_TOKEN, POKEMON_TCG_API_KEY."
-          : undefined,
+      message: responseMessage,
+      ...(psa10Scan ? { psa10Scan } : {}),
     });
   } catch (error) {
     console.error("Deal search error:", error);

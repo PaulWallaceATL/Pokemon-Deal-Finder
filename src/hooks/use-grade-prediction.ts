@@ -9,6 +9,8 @@ interface UseGradePredictionOptions {
   condition: string;
   productType: string;
   existingPrediction: PredictedGradeData | null;
+  /** When true, POSTs `strict: true` to `/api/grade-predict` (harsh PSA resale-style vision + full report). */
+  strictVision?: boolean;
 }
 
 interface UseGradePredictionResult {
@@ -26,14 +28,21 @@ interface CachedGrade {
   timestamp: number;
 }
 
-function getCached(dealId: string): PredictedGradeData | null {
+function cacheKey(dealId: string, strictVision: boolean): string {
+  return CACHE_PREFIX + (strictVision ? "strict-" : "") + dealId;
+}
+
+function getCached(
+  dealId: string,
+  strictVision: boolean
+): PredictedGradeData | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(CACHE_PREFIX + dealId);
+    const raw = localStorage.getItem(cacheKey(dealId, strictVision));
     if (!raw) return null;
     const cached: CachedGrade = JSON.parse(raw);
     if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
-      localStorage.removeItem(CACHE_PREFIX + dealId);
+      localStorage.removeItem(cacheKey(dealId, strictVision));
       return null;
     }
     return cached.data;
@@ -42,11 +51,15 @@ function getCached(dealId: string): PredictedGradeData | null {
   }
 }
 
-function setCache(dealId: string, data: PredictedGradeData): void {
+function setCache(
+  dealId: string,
+  data: PredictedGradeData,
+  strictVision: boolean
+): void {
   if (typeof window === "undefined") return;
   try {
     const entry: CachedGrade = { data, timestamp: Date.now() };
-    localStorage.setItem(CACHE_PREFIX + dealId, JSON.stringify(entry));
+    localStorage.setItem(cacheKey(dealId, strictVision), JSON.stringify(entry));
   } catch {
     // localStorage full or unavailable
   }
@@ -65,6 +78,7 @@ export function useGradePrediction({
   condition,
   productType,
   existingPrediction,
+  strictVision = false,
 }: UseGradePredictionOptions): UseGradePredictionResult {
   const [predictedGrade, setPredictedGrade] = useState<PredictedGradeData | null>(
     existingPrediction
@@ -77,11 +91,11 @@ export function useGradePrediction({
     if (existingPrediction) return;
     if (productType !== "raw") return;
 
-    const cached = getCached(dealId);
+    const cached = getCached(dealId, strictVision);
     if (cached) {
       setPredictedGrade(cached);
     }
-  }, [dealId, existingPrediction, productType]);
+  }, [dealId, existingPrediction, productType, strictVision]);
 
   const analyze = useCallback(async () => {
     if (productType !== "raw") return;
@@ -118,11 +132,21 @@ export function useGradePrediction({
         const response = await fetch("/api/grade-predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl, condition }),
+          body: JSON.stringify({
+            imageUrl,
+            condition,
+            ...(strictVision ? { strict: true } : {}),
+          }),
         });
 
         if (response.ok) {
-          const aiResult = await response.json();
+          const aiResult = (await response.json()) as {
+            predictedGrade: number;
+            centering: { frontLR: number; frontTB: number };
+            confidence: "high" | "medium" | "low";
+            strict?: boolean;
+            strictReport?: PredictedGradeData["strictReport"];
+          };
           const aiGrade: PredictedGradeData = {
             grade: aiResult.predictedGrade,
             centering: {
@@ -130,10 +154,11 @@ export function useGradePrediction({
               frontTB: `${Math.round(aiResult.centering.frontTB)}/${100 - Math.round(aiResult.centering.frontTB)}`,
             },
             confidence: aiResult.confidence,
-            source: "ai",
+            source: aiResult.strict ? "psa10_scan" : "ai",
+            strictReport: aiResult.strictReport,
           };
           setPredictedGrade(aiGrade);
-          setCache(dealId, aiGrade);
+          setCache(dealId, aiGrade, strictVision);
           setIsLoading(false);
           return;
         }
@@ -144,20 +169,20 @@ export function useGradePrediction({
       // Use canvas result if AI failed
       if (canvasResult) {
         setPredictedGrade(canvasResult);
-        setCache(dealId, canvasResult);
+        setCache(dealId, canvasResult, strictVision);
       } else {
         // Last resort: condition-only prediction
         const { predictGrade } = await import("@/lib/grading/grade-predictor");
         const fallback = predictGrade({ condition });
         setPredictedGrade(fallback);
-        setCache(dealId, fallback);
+        setCache(dealId, fallback, strictVision);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setIsLoading(false);
     }
-  }, [dealId, imageUrl, condition, productType, isLoading]);
+  }, [dealId, imageUrl, condition, productType, isLoading, strictVision]);
 
   return { predictedGrade, isLoading, error, analyze };
 }

@@ -408,8 +408,16 @@ function getGradeHighlight(
     : "";
 }
 
+function predictionSourceLabel(source: PredictedGradeData["source"]): string {
+  if (source === "ai") return "AI Vision";
+  if (source === "canvas") return "Image Analysis";
+  if (source === "psa10_scan") return "Strict PSA scan (vision)";
+  return "Condition-based";
+}
+
 function PredictedGradeBadge({ prediction }: { prediction: PredictedGradeData }) {
   const gradeLabel = PSA_GRADE_LABELS[prediction.grade] ?? `PSA ${prediction.grade}`;
+  const strict = prediction.strictReport;
 
   return (
     <TooltipProvider>
@@ -434,12 +442,67 @@ function PredictedGradeBadge({ prediction }: { prediction: PredictedGradeData })
             Centering: {prediction.centering.frontLR} LR &middot; {prediction.centering.frontTB} TB
           </span>
         </TooltipTrigger>
-        <TooltipContent>
-          <div className="space-y-1 text-xs">
+        <TooltipContent className="max-h-80 max-w-sm overflow-y-auto">
+          <div className="space-y-2 text-xs">
             <p className="font-semibold">PSA Grade Prediction (2026 Standards)</p>
             <p>Centering L/R: {prediction.centering.frontLR}</p>
             <p>Centering T/B: {prediction.centering.frontTB}</p>
-            <p>{confidenceLabel(prediction.confidence)} &middot; Source: {prediction.source === "ai" ? "AI Vision" : prediction.source === "canvas" ? "Image Analysis" : "Condition-based"}</p>
+            <p>
+              {confidenceLabel(prediction.confidence)} &middot; Source:{" "}
+              {predictionSourceLabel(prediction.source)}
+            </p>
+            {strict ? (
+              <div className="space-y-1 border-t border-border pt-2 text-[11px] leading-snug">
+                <p>
+                  <span className="font-semibold">Range:</span>{" "}
+                  {strict.estimatedGradeRange} &middot; ceiling PSA{" "}
+                  {strict.ceilingGrade}, floor PSA {strict.floorGrade}
+                </p>
+                <p>
+                  <span className="font-semibold">Submit?</span>{" "}
+                  {strict.worthSubmitting} — {strict.worthSubmittingReason}
+                </p>
+                {strict.notPsa10Explanation &&
+                strict.notPsa10Explanation !== "N/A" ? (
+                  <p>
+                    <span className="font-semibold">Not GEM MT:</span>{" "}
+                    {strict.notPsa10Explanation}
+                  </p>
+                ) : null}
+                <p>
+                  <span className="font-semibold">Corners:</span>{" "}
+                  {strict.cornersSummary}
+                </p>
+                <p>
+                  <span className="font-semibold">Edges:</span>{" "}
+                  {strict.edgesSummary}
+                </p>
+                <p>
+                  <span className="font-semibold">Surface:</span>{" "}
+                  {strict.surfaceSummary}
+                </p>
+                <p>
+                  <span className="font-semibold">Eye appeal:</span>{" "}
+                  {strict.eyeAppealSummary}
+                </p>
+                <p>
+                  <span className="font-semibold">Centering cap:</span>{" "}
+                  PSA ~{strict.centeringLimitsMaxGrade} —{" "}
+                  {strict.centeringLimitsNotes}
+                </p>
+                <p>
+                  Back (from scan): {strict.backLR} / {strict.backTB}
+                </p>
+                <a
+                  href={strict.centeringToolUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Open mew centering <ExternalLink className="size-3" />
+                </a>
+              </div>
+            ) : null}
           </div>
         </TooltipContent>
       </Tooltip>

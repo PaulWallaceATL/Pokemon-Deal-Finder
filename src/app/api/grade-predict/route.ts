@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  analyzePsaStrictFromImageUrl,
+  ratioStringToWiderSidePct,
+  visionToStrictScanReport,
+} from "@/lib/grading/psa-strict-vision";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+type CornerBucket = "sharp" | "slight_wear" | "moderate_wear" | "rounded";
+type EdgeBucket = "clean" | "slight_fraying" | "moderate_wear" | "heavy_wear";
+type SurfaceBucket =
+  | "clean"
+  | "minor_imperfections"
+  | "scratches"
+  | "heavy_wear";
 
 interface VisionGradeResponse {
   predictedGrade: number;
@@ -8,9 +21,9 @@ interface VisionGradeResponse {
     frontLR: number;
     frontTB: number;
   };
-  corners: string;
-  edges: string;
-  surface: string;
+  corners: CornerBucket;
+  edges: EdgeBucket;
+  surface: SurfaceBucket;
   confidence: "high" | "medium" | "low";
 }
 
@@ -41,12 +54,37 @@ You MUST respond with ONLY valid JSON in this exact format:
   "confidence": "<high|medium|low>"
 }`;
 
+function legacyCornersFromSummary(summary: string): CornerBucket {
+  const t = summary.toLowerCase();
+  if (/heavy|severe|rounded|trashed/i.test(t)) return "rounded";
+  if (/moderate/i.test(t)) return "moderate_wear";
+  if (/minor|slight|tiny|small|light/i.test(t)) return "slight_wear";
+  return "sharp";
+}
+
+function legacyEdgesFromSummary(summary: string): EdgeBucket {
+  const t = summary.toLowerCase();
+  if (/heavy|severe|chipped/i.test(t)) return "heavy_wear";
+  if (/moderate/i.test(t)) return "moderate_wear";
+  if (/slight|minor|whitening/i.test(t)) return "slight_fraying";
+  return "clean";
+}
+
+function legacySurfaceFromSummary(summary: string): SurfaceBucket {
+  const t = summary.toLowerCase();
+  if (/heavy|severe|major/i.test(t)) return "heavy_wear";
+  if (/scratch|print line|dent|stain/i.test(t)) return "scratches";
+  if (/minor|small|light/i.test(t)) return "minor_imperfections";
+  return "clean";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageUrl, condition } = body as {
+    const { imageUrl, condition, strict } = body as {
       imageUrl: string;
-      condition: string;
+      condition?: string;
+      strict?: boolean;
     };
 
     if (!imageUrl) {
@@ -61,6 +99,36 @@ export async function POST(request: NextRequest) {
         { error: "OPENAI_API_KEY not configured" },
         { status: 503 }
       );
+    }
+
+    if (strict === true) {
+      const vision = await analyzePsaStrictFromImageUrl(imageUrl, {
+        condition: condition ?? "",
+      });
+      if (!vision) {
+        return NextResponse.json(
+          { error: "Strict PSA analysis failed" },
+          { status: 502 }
+        );
+      }
+
+      const wLR = ratioStringToWiderSidePct(vision.centering.frontLR);
+      const wTB = ratioStringToWiderSidePct(vision.centering.frontTB);
+
+      return NextResponse.json({
+        strict: true,
+        predictedGrade: vision.mostLikelyGrade,
+        centering: {
+          frontLR: wLR,
+          frontTB: wTB,
+        },
+        corners: legacyCornersFromSummary(vision.cornersSummary),
+        edges: legacyEdgesFromSummary(vision.edgesSummary),
+        surface: legacySurfaceFromSummary(vision.surfaceSummary),
+        confidence: vision.confidence,
+        strictReport: visionToStrictScanReport(vision),
+        isPsa10Candidate: vision.isPsa10Candidate,
+      });
     }
 
     const userPrompt = condition
@@ -112,11 +180,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse JSON from the response (handle markdown code blocks)
-    const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const jsonStr = content
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
     const parsed: VisionGradeResponse = JSON.parse(jsonStr);
 
-    // Validate the response shape
     if (
       typeof parsed.predictedGrade !== "number" ||
       parsed.predictedGrade < 1 ||
@@ -129,6 +198,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
+      strict: false,
       predictedGrade: parsed.predictedGrade,
       centering: {
         frontLR: parsed.centering?.frontLR ?? 50,

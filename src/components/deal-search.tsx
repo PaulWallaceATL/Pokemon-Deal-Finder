@@ -100,7 +100,8 @@ const FINISH_OPTIONS: { value: CardFinishFilter; label: string }[] = [
 export function DealSearch() {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"singles" | "sealed">("singles");
-  const [singlesType, setSinglesType] = useState<"raw" | "graded">("raw");
+  /** Default: graded slabs (underpriced slab hunt). */
+  const [singlesType, setSinglesType] = useState<"raw" | "graded">("graded");
   const [setId, setSetId] = useState<string>("all");
   const [grader, setGrader] = useState<string>("PSA");
   const [grade, setGrade] = useState<string>("10");
@@ -202,8 +203,8 @@ export function DealSearch() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="graded">Graded slab (default)</SelectItem>
                   <SelectItem value="raw">Raw (ungraded)</SelectItem>
-                  <SelectItem value="graded">Graded slab</SelectItem>
                 </SelectContent>
               </Select>
               {singlesType === "graded" ? (
@@ -279,7 +280,10 @@ export function DealSearch() {
                 </Select>
                 <p className="text-[11px] leading-snug text-muted-foreground">
                   Narrows eBay search and hides listings that don&apos;t match
-                  the printing (best-effort from titles).
+                  the printing (best-effort from titles). For AI &quot;pre-grade&quot;
+                  on raw PSA 10 candidates, use the separate{" "}
+                  <strong className="text-foreground">Pre-pregrade raw</strong>{" "}
+                  section below.
                 </p>
               </div>
             )}
@@ -339,12 +343,14 @@ export function DealSearch() {
 
       <div className="min-w-0 flex-1 space-y-4">
         <div className="rounded-xl border bg-card p-4 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold">Find Deals Instantly</h2>
+          <h2 className="mb-2 text-lg font-semibold">
+            Find underpriced slabs (and sealed)
+          </h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Search by card or product name. Use the filters on the left for
-            singles vs sealed, set, printing, and grade. Each graded listing is
-            compared to a guide for its own slab grade when we can read it from
-            the title.
+            Defaults to <strong className="text-foreground">graded slabs</strong>
+            : we compare each listing to market guides for that slab grade. Switch
+            to raw for ungraded deal hunting without AI grading. Sealed uses
+            factory-sealed product filters.
           </p>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -376,7 +382,7 @@ export function DealSearch() {
           <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-xl border bg-card">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Scanning eBay &amp; checking market prices...
+              Scanning eBay and checking market prices…
             </p>
           </div>
         )}

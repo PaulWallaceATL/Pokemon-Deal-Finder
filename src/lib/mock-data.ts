@@ -23,6 +23,26 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   case: "Case",
 };
 
+/** Populated when instant search runs strict PSA vision (PSA 10 candidate mode). */
+export interface PsaStrictScanReport {
+  estimatedGradeRange: string;
+  ceilingGrade: number;
+  floorGrade: number;
+  worthSubmitting: "Yes" | "No";
+  worthSubmittingReason: string;
+  notPsa10Explanation: string;
+  cornersSummary: string;
+  edgesSummary: string;
+  surfaceSummary: string;
+  eyeAppealSummary: string;
+  centeringLimitsMaxGrade: number;
+  centeringLimitsNotes: string;
+  backLR: string;
+  backTB: string;
+  /** e.g. https://centering.mew.cards/ — paste the listing photo for pixel centering. */
+  centeringToolUrl: string;
+}
+
 export interface PredictedGradeData {
   grade: number;
   centering: {
@@ -30,7 +50,9 @@ export interface PredictedGradeData {
     frontTB: string;
   };
   confidence: "high" | "medium" | "low";
-  source: "ai" | "canvas" | "condition";
+  source: "ai" | "canvas" | "condition" | "psa10_scan";
+  /** Strict PSA narrative + resale notes from vision (psa10_scan only). */
+  strictReport?: PsaStrictScanReport;
 }
 
 export interface MockDeal {
