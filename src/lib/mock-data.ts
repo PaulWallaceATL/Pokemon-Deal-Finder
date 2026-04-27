@@ -25,6 +25,8 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
 
 /** Populated when instant search runs strict PSA vision (PSA 10 candidate mode). */
 export interface PsaStrictScanReport {
+  /** PSA tier the user asked to hunt (e.g. 9 for vintage). */
+  targetGrade?: number;
   estimatedGradeRange: string;
   ceilingGrade: number;
   floorGrade: number;

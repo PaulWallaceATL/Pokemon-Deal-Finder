@@ -11,6 +11,8 @@ interface UseGradePredictionOptions {
   existingPrediction: PredictedGradeData | null;
   /** When true, POSTs `strict: true` to `/api/grade-predict` (harsh PSA resale-style vision + full report). */
   strictVision?: boolean;
+  /** With `strictVision`, optional PSA tier for candidacy (default 10 on the server). */
+  strictTargetGrade?: number;
 }
 
 interface UseGradePredictionResult {
@@ -28,21 +30,33 @@ interface CachedGrade {
   timestamp: number;
 }
 
-function cacheKey(dealId: string, strictVision: boolean): string {
-  return CACHE_PREFIX + (strictVision ? "strict-" : "") + dealId;
+function cacheKey(
+  dealId: string,
+  strictVision: boolean,
+  strictTargetGrade?: number
+): string {
+  if (!strictVision) return CACHE_PREFIX + dealId;
+  const tier =
+    strictTargetGrade != null ? `${strictTargetGrade}-` : "";
+  return `${CACHE_PREFIX}strict-${tier}${dealId}`;
 }
 
 function getCached(
   dealId: string,
-  strictVision: boolean
+  strictVision: boolean,
+  strictTargetGrade?: number
 ): PredictedGradeData | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(cacheKey(dealId, strictVision));
+    const raw = localStorage.getItem(
+      cacheKey(dealId, strictVision, strictTargetGrade)
+    );
     if (!raw) return null;
     const cached: CachedGrade = JSON.parse(raw);
     if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
-      localStorage.removeItem(cacheKey(dealId, strictVision));
+      localStorage.removeItem(
+        cacheKey(dealId, strictVision, strictTargetGrade)
+      );
       return null;
     }
     return cached.data;
@@ -54,12 +68,16 @@ function getCached(
 function setCache(
   dealId: string,
   data: PredictedGradeData,
-  strictVision: boolean
+  strictVision: boolean,
+  strictTargetGrade?: number
 ): void {
   if (typeof window === "undefined") return;
   try {
     const entry: CachedGrade = { data, timestamp: Date.now() };
-    localStorage.setItem(cacheKey(dealId, strictVision), JSON.stringify(entry));
+    localStorage.setItem(
+      cacheKey(dealId, strictVision, strictTargetGrade),
+      JSON.stringify(entry)
+    );
   } catch {
     // localStorage full or unavailable
   }
@@ -79,6 +97,7 @@ export function useGradePrediction({
   productType,
   existingPrediction,
   strictVision = false,
+  strictTargetGrade,
 }: UseGradePredictionOptions): UseGradePredictionResult {
   const [predictedGrade, setPredictedGrade] = useState<PredictedGradeData | null>(
     existingPrediction
@@ -91,11 +110,11 @@ export function useGradePrediction({
     if (existingPrediction) return;
     if (productType !== "raw") return;
 
-    const cached = getCached(dealId, strictVision);
+    const cached = getCached(dealId, strictVision, strictTargetGrade);
     if (cached) {
       setPredictedGrade(cached);
     }
-  }, [dealId, existingPrediction, productType, strictVision]);
+  }, [dealId, existingPrediction, productType, strictVision, strictTargetGrade]);
 
   const analyze = useCallback(async () => {
     if (productType !== "raw") return;
@@ -135,7 +154,14 @@ export function useGradePrediction({
           body: JSON.stringify({
             imageUrl,
             condition,
-            ...(strictVision ? { strict: true } : {}),
+            ...(strictVision
+              ? {
+                  strict: true,
+                  ...(strictTargetGrade != null
+                    ? { targetGrade: strictTargetGrade }
+                    : {}),
+                }
+              : {}),
           }),
         });
 
@@ -158,7 +184,7 @@ export function useGradePrediction({
             strictReport: aiResult.strictReport,
           };
           setPredictedGrade(aiGrade);
-          setCache(dealId, aiGrade, strictVision);
+          setCache(dealId, aiGrade, strictVision, strictTargetGrade);
           setIsLoading(false);
           return;
         }
@@ -169,20 +195,28 @@ export function useGradePrediction({
       // Use canvas result if AI failed
       if (canvasResult) {
         setPredictedGrade(canvasResult);
-        setCache(dealId, canvasResult, strictVision);
+        setCache(dealId, canvasResult, strictVision, strictTargetGrade);
       } else {
         // Last resort: condition-only prediction
         const { predictGrade } = await import("@/lib/grading/grade-predictor");
         const fallback = predictGrade({ condition });
         setPredictedGrade(fallback);
-        setCache(dealId, fallback, strictVision);
+        setCache(dealId, fallback, strictVision, strictTargetGrade);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setIsLoading(false);
     }
-  }, [dealId, imageUrl, condition, productType, isLoading, strictVision]);
+  }, [
+    dealId,
+    imageUrl,
+    condition,
+    productType,
+    isLoading,
+    strictVision,
+    strictTargetGrade,
+  ]);
 
   return { predictedGrade, isLoading, error, analyze };
 }

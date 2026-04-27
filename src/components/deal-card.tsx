@@ -411,7 +411,7 @@ function getGradeHighlight(
 function predictionSourceLabel(source: PredictedGradeData["source"]): string {
   if (source === "ai") return "AI Vision";
   if (source === "canvas") return "Image Analysis";
-  if (source === "psa10_scan") return "Strict PSA scan (vision)";
+  if (source === "psa10_scan") return "Strict PSA pre-grade (vision)";
   return "Condition-based";
 }
 
@@ -453,6 +453,12 @@ function PredictedGradeBadge({ prediction }: { prediction: PredictedGradeData })
             </p>
             {strict ? (
               <div className="space-y-1 border-t border-border pt-2 text-[11px] leading-snug">
+                {strict.targetGrade != null ? (
+                  <p>
+                    <span className="font-semibold">Hunt target:</span> PSA{" "}
+                    {strict.targetGrade}
+                  </p>
+                ) : null}
                 <p>
                   <span className="font-semibold">Range:</span>{" "}
                   {strict.estimatedGradeRange} &middot; ceiling PSA{" "}
@@ -465,7 +471,11 @@ function PredictedGradeBadge({ prediction }: { prediction: PredictedGradeData })
                 {strict.notPsa10Explanation &&
                 strict.notPsa10Explanation !== "N/A" ? (
                   <p>
-                    <span className="font-semibold">Not GEM MT:</span>{" "}
+                    <span className="font-semibold">
+                      {strict.targetGrade != null
+                        ? `Not PSA ${strict.targetGrade} bar:`
+                        : "Not GEM MT:"}
+                    </span>{" "}
                     {strict.notPsa10Explanation}
                   </p>
                 ) : null}

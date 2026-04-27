@@ -1,6 +1,7 @@
 import {
+  buildPsaStrictVisionSystem,
   CENTERING_MEW_CARDS_URL,
-  PSA_STRICT_VISION_SYSTEM,
+  clampHalfGrade,
 } from "./psa-strict-grader-prompt";
 import type { PsaStrictScanReport } from "@/lib/mock-data";
 
@@ -9,6 +10,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 export type PsaStrictVisionConfidence = "high" | "medium" | "low";
 
 export interface PsaStrictVisionJson {
+  targetGrade: number;
   centering: {
     frontLR: string;
     frontTB: string;
@@ -28,7 +30,8 @@ export interface PsaStrictVisionJson {
   worthSubmitting: "Yes" | "No";
   worthSubmittingReason: string;
   notPsa10Explanation: string;
-  isPsa10Candidate: boolean;
+  /** True if the card plausibly hits the requested PSA tier (see targetGrade). */
+  isTargetGradeCandidate: boolean;
   confidence: PsaStrictVisionConfidence;
 }
 
@@ -48,18 +51,23 @@ function clampGrade(n: unknown): number {
 
 /**
  * Runs strict PSA-style vision on a listing image URL (OpenAI).
+ * `targetGrade` sets candidacy rules (10 = GEM hunt, 9 = vintage mint hunt, etc.).
  * Returns null if unconfigured or the API fails.
  */
 export async function analyzePsaStrictFromImageUrl(
   imageUrl: string,
-  opts?: { condition?: string; model?: string }
+  opts?: { condition?: string; model?: string; targetGrade?: number }
 ): Promise<PsaStrictVisionJson | null> {
   if (!OPENAI_API_KEY) return null;
 
+  const targetGrade = clampHalfGrade(opts?.targetGrade ?? 10);
   const condition = opts?.condition?.trim();
-  const userText = condition
-    ? `Seller condition note (may be unreliable): "${condition}". Still grade strictly from the image.`
-    : "Grade strictly from the image only.";
+  const userLines = [
+    `Collector PSA target for candidacy: **${targetGrade}** (half-point scale allowed). Grade against that goal.`,
+    condition
+      ? `Seller condition note (may be unreliable): "${condition}". Still grade strictly from the image.`
+      : "Grade strictly from the image only.",
+  ];
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -71,11 +79,11 @@ export async function analyzePsaStrictFromImageUrl(
       body: JSON.stringify({
         model: opts?.model ?? "gpt-4o",
         messages: [
-          { role: "system", content: PSA_STRICT_VISION_SYSTEM },
+          { role: "system", content: buildPsaStrictVisionSystem(targetGrade) },
           {
             role: "user",
             content: [
-              { type: "text", text: userText },
+              { type: "text", text: userLines.join("\n") },
               { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
             ],
           },
@@ -94,7 +102,9 @@ export async function analyzePsaStrictFromImageUrl(
     const content = data.choices?.[0]?.message?.content?.trim();
     if (!content) return null;
 
-    const parsed = JSON.parse(stripJsonFences(content)) as Partial<PsaStrictVisionJson>;
+    const parsed = JSON.parse(stripJsonFences(content)) as Partial<
+      PsaStrictVisionJson & { isPsa10Candidate?: boolean }
+    >;
     const c = parsed.centering;
     if (!c || typeof c.frontLR !== "string" || typeof c.frontTB !== "string") {
       return null;
@@ -105,7 +115,13 @@ export async function analyzePsaStrictFromImageUrl(
         ? parsed.confidence
         : "medium";
 
+    const isTargetGradeCandidate =
+      typeof parsed.isTargetGradeCandidate === "boolean"
+        ? parsed.isTargetGradeCandidate
+        : targetGrade === 10 && Boolean(parsed.isPsa10Candidate);
+
     return {
+      targetGrade,
       centering: {
         frontLR: c.frontLR,
         frontTB: c.frontTB,
@@ -128,7 +144,7 @@ export async function analyzePsaStrictFromImageUrl(
       worthSubmitting: parsed.worthSubmitting === "No" ? "No" : "Yes",
       worthSubmittingReason: String(parsed.worthSubmittingReason ?? ""),
       notPsa10Explanation: String(parsed.notPsa10Explanation ?? ""),
-      isPsa10Candidate: Boolean(parsed.isPsa10Candidate),
+      isTargetGradeCandidate,
       confidence: conf,
     };
   } catch (e) {
@@ -160,6 +176,7 @@ export function visionToStrictScanReport(
   vision: PsaStrictVisionJson
 ): PsaStrictScanReport {
   return {
+    targetGrade: vision.targetGrade,
     estimatedGradeRange: vision.estimatedGradeRange,
     ceilingGrade: vision.ceilingGrade,
     floorGrade: vision.floorGrade,

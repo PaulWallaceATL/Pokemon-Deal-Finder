@@ -40,6 +40,7 @@ import {
   type ListingPrintKind,
 } from "@/lib/listing/listing-comp-query";
 import { attachSlabPrintKindByListingId } from "@/lib/listing/slab-print-vision";
+import { clampHalfGrade } from "@/lib/grading/psa-strict-grader-prompt";
 import {
   analyzePsaStrictFromImageUrl,
   centeringCrossCheckUrl,
@@ -377,8 +378,8 @@ function dealWithStrictPsaPrediction(
       strictReport: visionToStrictScanReport(vision),
     },
     listingReferenceNote: deal.listingReferenceNote
-      ? `${deal.listingReferenceNote} · PSA 10 candidate scan (strict vision).`
-      : "PSA 10 candidate scan (strict vision).",
+      ? `${deal.listingReferenceNote} · PSA ${vision.targetGrade} pre-grade scan (strict vision).`
+      : `PSA ${vision.targetGrade} pre-grade scan (strict vision).`,
   };
 }
 
@@ -414,6 +415,11 @@ export async function GET(request: Request) {
     psa10ScanRaw != null && psa10ScanRaw !== ""
       ? Math.min(24, Math.max(0, parseInt(psa10ScanRaw, 10) || 0))
       : 0;
+  const pregradeTargetRaw = searchParams.get("pregradeTarget");
+  const pregradeTarget =
+    pregradeTargetRaw != null && pregradeTargetRaw !== ""
+      ? clampHalfGrade(parseFloat(pregradeTargetRaw))
+      : 10;
 
   if (!query) {
     return NextResponse.json(
@@ -773,6 +779,7 @@ export async function GET(request: Request) {
           mode: "psa10_strict";
           applicable: boolean;
           scanLimit: number;
+          targetGrade: number;
           scanned: number;
           matched: number;
           centeringToolUrl: string;
@@ -787,17 +794,19 @@ export async function GET(request: Request) {
           mode: "psa10_strict",
           applicable: false,
           scanLimit: psa10ScanLimit,
+          targetGrade: pregradeTarget,
           scanned: 0,
           matched: 0,
           centeringToolUrl,
           message:
-            "PSA 10 candidate scan only applies to raw singles. Switch to Raw (ungraded) and search again.",
+            "PSA pre-grade scan only applies to raw singles. Use the Pre-pregrade raw section.",
         };
       } else if (!process.env.OPENAI_API_KEY) {
         psa10Scan = {
           mode: "psa10_strict",
           applicable: false,
           scanLimit: psa10ScanLimit,
+          targetGrade: pregradeTarget,
           scanned: 0,
           matched: 0,
           centeringToolUrl,
@@ -812,8 +821,9 @@ export async function GET(request: Request) {
           if (!url) return null;
           const vision = await analyzePsaStrictFromImageUrl(url, {
             condition: deal.condition,
+            targetGrade: pregradeTarget,
           });
-          if (!vision?.isPsa10Candidate) return null;
+          if (!vision?.isTargetGradeCandidate) return null;
           return dealWithStrictPsaPrediction(deal, vision);
         });
         const candidates = scanResults.filter((d): d is Deal => d != null);
@@ -821,17 +831,17 @@ export async function GET(request: Request) {
         let scanMessage: string | undefined;
         if (candidates.length === 0) {
           if (slice.length > 0) {
-            scanMessage =
-              "No scanned listings passed strict PSA 10 candidate rules (harsh vision + unseen reverse risk). Try a higher psa10Scan count or a broader query. Cross-check photos on the centering tool URL below.";
+            scanMessage = `No scanned listings passed strict PSA ${pregradeTarget} candidate rules (harsh vision + unseen reverse risk). Try a higher psa10Scan count, another target grade, or a broader query. Cross-check photos on the centering tool URL below.`;
           } else if (!hadDealsBeforeScan) {
             scanMessage =
-              "PSA 10 scan had no deal-priced listings to evaluate. Try a different search or relax price/deal filters first.";
+              "Pre-grade scan had no deal-priced listings to evaluate. Try a different search or relax price/deal filters first.";
           }
         }
         psa10Scan = {
           mode: "psa10_strict",
           applicable: true,
           scanLimit: psa10ScanLimit,
+          targetGrade: pregradeTarget,
           scanned: slice.length,
           matched: candidates.length,
           centeringToolUrl,

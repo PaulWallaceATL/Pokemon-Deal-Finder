@@ -47,12 +47,18 @@ interface SearchResponse {
     mode: "psa10_strict";
     applicable: boolean;
     scanLimit: number;
+    targetGrade: number;
     scanned: number;
     matched: number;
     centeringToolUrl: string;
     message?: string;
   };
 }
+
+/** Half-point PSA tiers the user can hunt (vintage 9, cheap 8, etc.). */
+const PREGRADE_TARGET_GRADES = [
+  10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5, 5, 4, 3, 2, 1,
+] as const;
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -73,13 +79,14 @@ const SCAN_COUNTS = [4, 6, 8, 10, 12, 16, 20, 24] as const;
 
 /**
  * Separate from slab deal hunt: raw eBay listings priced as deals, then strict
- * PSA-style vision to surface likely PSA 10 submission candidates.
+ * PSA-style vision for a user-chosen tier (PSA 10, 9, 8, …).
  */
 export function RawPregradeSearch() {
   const [query, setQuery] = useState("");
   const [setId, setSetId] = useState<string>("all");
   const [finish, setFinish] = useState<CardFinishFilter>("any");
   const [psa10ScanCount, setPsa10ScanCount] = useState(10);
+  const [pregradeTarget, setPregradeTarget] = useState<number>(10);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -98,6 +105,7 @@ export function RawPregradeSearch() {
       if (finish !== "any") params.set("finish", finish);
       const n = Math.min(24, Math.max(1, psa10ScanCount));
       params.set("psa10Scan", String(n));
+      params.set("pregradeTarget", String(pregradeTarget));
 
       const res = await fetch(`/api/deals/search?${params.toString()}`);
       if (!res.ok) throw new Error("Search failed");
@@ -138,6 +146,40 @@ export function RawPregradeSearch() {
           for a second read. Needs{" "}
           <code className="rounded bg-muted px-0.5">OPENAI_API_KEY</code>.
         </p>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            PSA target (candidacy)
+          </label>
+          <Select
+            value={String(pregradeTarget)}
+            onValueChange={(v) => setPregradeTarget(Number(v) || 10)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              {PREGRADE_TARGET_GRADES.map((g) => (
+                <SelectItem key={g} value={String(g)}>
+                  PSA {g}
+                  {g >= 10
+                    ? " — GEM"
+                    : g >= 9
+                      ? " — mint band"
+                      : g >= 8
+                        ? " — NM-MT"
+                        : g >= 7
+                          ? " — NM"
+                          : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Vision + filters use this tier (e.g. vintage often chases a{" "}
+            <strong className="text-foreground">9</strong>).
+          </p>
+        </div>
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
@@ -268,7 +310,9 @@ export function RawPregradeSearch() {
                     : "border-amber-500/40 bg-amber-500/[0.06]"
                 )}
               >
-                <p className="font-medium text-foreground">PSA 10 candidate scan</p>
+                <p className="font-medium text-foreground">
+                  PSA {results.psa10Scan.targetGrade} candidate scan
+                </p>
                 {results.psa10Scan.applicable ? (
                   <>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -278,7 +322,8 @@ export function RawPregradeSearch() {
                       <span className="font-semibold text-foreground">
                         {results.psa10Scan.matched}
                       </span>{" "}
-                      as strict PSA 10 candidates. Cross-check on{" "}
+                      as strict PSA {results.psa10Scan.targetGrade} candidates.
+                      Cross-check on{" "}
                       <a
                         href={results.psa10Scan.centeringToolUrl}
                         target="_blank"

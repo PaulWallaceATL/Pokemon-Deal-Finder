@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clampHalfGrade } from "@/lib/grading/psa-strict-grader-prompt";
 import {
   analyzePsaStrictFromImageUrl,
   ratioStringToWiderSidePct,
@@ -81,10 +82,12 @@ function legacySurfaceFromSummary(summary: string): SurfaceBucket {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageUrl, condition, strict } = body as {
+    const { imageUrl, condition, strict, targetGrade: bodyTarget } = body as {
       imageUrl: string;
       condition?: string;
       strict?: boolean;
+      /** PSA tier for strict candidacy (1–10, half-points). Default 10. */
+      targetGrade?: number;
     };
 
     if (!imageUrl) {
@@ -102,8 +105,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (strict === true) {
+      const targetGrade =
+        bodyTarget != null && Number.isFinite(Number(bodyTarget))
+          ? clampHalfGrade(Number(bodyTarget))
+          : 10;
       const vision = await analyzePsaStrictFromImageUrl(imageUrl, {
         condition: condition ?? "",
+        targetGrade,
       });
       if (!vision) {
         return NextResponse.json(
@@ -127,7 +135,10 @@ export async function POST(request: NextRequest) {
         surface: legacySurfaceFromSummary(vision.surfaceSummary),
         confidence: vision.confidence,
         strictReport: visionToStrictScanReport(vision),
-        isPsa10Candidate: vision.isPsa10Candidate,
+        targetGrade: vision.targetGrade,
+        isTargetGradeCandidate: vision.isTargetGradeCandidate,
+        isPsa10Candidate:
+          vision.targetGrade === 10 && vision.isTargetGradeCandidate,
       });
     }
 
